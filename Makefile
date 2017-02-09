@@ -31,8 +31,8 @@
 #                   PCIE
 #                   
 #
-CONFIG_CHIP_NAME = 3662
-CONFIG_INF_TYPE=USB
+CONFIG_CHIP_NAME = 3883
+CONFIG_INF_TYPE=MII
 
 #
 # Please enable CONFIG_EXTRA_CFLAG=y on 2.6.25 or above 
@@ -51,7 +51,7 @@ CONFIG_RALINK_SRC=y
 Aggregation_Enable=
 ifeq ($(CONFIG_INF_TYPE), MII)
 RetryPktSend_Enable=y
-PhaseLoadCode_Enable=
+PhaseLoadCode_Enable=y
 endif
 
 
@@ -69,8 +69,8 @@ CONFIG_WIDI_SUPPORT=
 
 
 ifeq ($(CONFIG_CHIP_NAME), $(filter 3662 3883, $(CONFIG_CHIP_NAME)))
-CONFIG_CONCURRENT_INIC_SUPPORT=
-CONFIG_NEW_MBSS_SUPPORT=
+CONFIG_CONCURRENT_INIC_SUPPORT=y
+CONFIG_NEW_MBSS_SUPPORT=y
 endif
 
 
@@ -82,7 +82,7 @@ CONFIG_PCI_FORCE_DMA=
 
 #PLATFORM = FREESCALE832X
 #PLATFORM = FREESCALE8377
-PLATFORM = ST
+#PLATFORM = ST
 #PLATFORM = IXP2
 #PLATFORM = TWINPASS
 #PLATFORM = 5VT
@@ -99,6 +99,15 @@ PLATFORM = ST
 #PLATFORM = INF_AMAZON_SE
 #PLATFORM = RT288x
 #PLATFORM = UBICOM6622
+PLATFORM = LEDE
+#PLATFORM = PC
+
+ifeq ($(PLATFORM),LEDE)
+LINUX_SRC = /home/vk/git/Easybox-904-XDSL/build_dir/target-mips_24kc_uClibc-1.0.22/linux-lantiq_xrx200/linux-4.4.46
+CROSS_COMPILE = /home/vitalii.kovzik/git/Easybox-904-XDSL/staging_dir/toolchain-mips_24kc_gcc-5.4.0_uClibc-1.0.22/bin/mips-openwrt-linux-uclibc-
+ARCH := mips
+export ARCH
+endif
 
 ifeq ($(PLATFORM),ST)
 LINUX_SRC = $(KERNELDIR)

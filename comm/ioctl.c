@@ -188,7 +188,9 @@ int Set_ATE_Load_E2P_Wrapper(
 	boolean         ret = FALSE;
 	unsigned char   *src;
 	struct file     *srcf;
-	s32             retval, orgfsuid, orgfsgid;
+	s32             retval;
+	kuid_t			orgfsuid;
+	kgid_t			orgfsgid;
 	mm_segment_t    orgfs;
 	u8              WriteEEPROM[EEPROM_SIZE];
 	UINT32          FileLength = 0;
@@ -218,8 +220,8 @@ int Set_ATE_Load_E2P_Wrapper(
 	override_cred = prepare_creds();
 	if (!override_cred)
 		return -ENOMEM;
-	override_cred->fsuid = 0;
-	override_cred->fsgid = 0;
+	override_cred->fsuid = GLOBAL_ROOT_UID;
+	override_cred->fsgid = GLOBAL_ROOT_GID;
 	old_cred = (struct cred *)override_creds(override_cred);
 #endif
 

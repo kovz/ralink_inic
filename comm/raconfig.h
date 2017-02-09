@@ -5,7 +5,8 @@
 #include <linux/compiler.h>
 #include <linux/module.h>
 //#include <linux/config.h>
-#include <linux/autoconf.h>//peter : for FC6
+//#include <linux/autoconf.h>//peter : for FC6
+#include <generated/autoconf.h>//peter : for FC6
 #include <linux/version.h>
 #include <linux/byteorder/generic.h>
 #include <linux/unistd.h>
@@ -317,7 +318,7 @@ typedef enum _SOURCE_TYPE {
 #else
 #define KERNEL_THREAD_BEGIN(name)      \
 {                                      \
-    daemonize(name);                   \
+    kthread_run(name);					\
     allow_signal(SIGKILL);             \
 }
 #endif

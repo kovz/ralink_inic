@@ -319,7 +319,9 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 {
 	unsigned char           *src;
 	struct file             *srcf;
-	int                     retval, orgfsuid, orgfsgid;
+	int                     retval;
+	kuid_t					orgfsuid;
+	kgid_t					orgfsgid;
 	mm_segment_t            orgfs;
 	char                    *buffer;
 	char                    *tmpbuf;
@@ -374,8 +376,8 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 	override_cred = prepare_creds();
 	if (!override_cred)
 		return -ENOMEM;
-	override_cred->fsuid = 0;
-	override_cred->fsgid = 0;
+	override_cred->fsuid.val = 0;
+	override_cred->fsgid.val = 0;
 	old_cred = (struct cred *)override_creds(override_cred);
 #endif
 	orgfs = get_fs();

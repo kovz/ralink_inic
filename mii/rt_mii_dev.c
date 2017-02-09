@@ -14,12 +14,12 @@ inline void free_netdev(struct net_device *dev)
 }
 #endif
 
-#ifndef HAVE_NETDEV_PRIV
-inline void *netdev_priv(struct net_device *dev)
-{
-	return dev->priv;
-}
-#endif
+//#ifndef HAVE_NETDEV_PRIV
+//inline void *netdev_priv(struct net_device *dev)
+//{
+//	return dev->priv;
+//}
+//#endif
 
 
 static int debug = -1;

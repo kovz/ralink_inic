@@ -5,7 +5,8 @@
 #include <linux/compiler.h>
 #include <linux/module.h>
 //#include <linux/config.h>
-#include <linux/autoconf.h>//peter : for FC6
+//#include <linux/autoconf.h>//peter : for FC6
+#include <generated/autoconf.h>//peter : for FC6
 #include <linux/version.h>
 #include <linux/byteorder/generic.h>
 #include <linux/unistd.h>
@@ -303,21 +304,21 @@ typedef struct _racfg_queue
 } RaCfgQueue;
 
 
-typedef struct file_handle
-{
-	char name[MAX_FILE_NAME_SIZE];
-	
-#if defined(MULTIPLE_CARD_SUPPORT) || defined(CONFIG_CONCURRENT_INIC_SUPPORT)
-	/* read name form card file */
-	char read_name[MAX_FILE_NAME_SIZE]; 
-#endif // MULTIPLE_CARD_SUPPORT || CONFIG_CONCURRENT_INIC_SUPPORT
+typedef struct m_file_handle
+ {
+ 	char name[MAX_FILE_NAME_SIZE];
 
-	struct file *fp;
-	int  seq;
-    u32  crc;
-    CRC_HEADER hdr;
-    unsigned char hdr_src[CRC_HEADER_LEN];
-} FileHandle;
+ #if defined(MULTIPLE_CARD_SUPPORT) || defined(CONFIG_CONCURRENT_INIC_SUPPORT)
+ 	/* read name form card file */
+ 	char read_name[MAX_FILE_NAME_SIZE];
+ #endif // MULTIPLE_CARD_SUPPORT || CONFIG_CONCURRENT_INIC_SUPPORT
+
+ 	struct file *fp;
+ 	int  seq;
+     u32  crc;
+     CRC_HEADER hdr;
+     unsigned char hdr_src[CRC_HEADER_LEN];
+ } FileHandle;
 
 typedef unsigned char   boolean;
 

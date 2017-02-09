@@ -3903,7 +3903,9 @@ boolean ConcurrentCardInfoRead(void)
 {
 
 	struct file *srcf;
-	s32 retval, orgfsuid, orgfsgid;
+	s32 retval;
+	kuid_t orgfsuid;
+	kgid_t orgfsgid;
 	mm_segment_t orgfs;
 	s8 *buffer, *tmpbuf, search_buf[30];
 	boolean flg_match_ok = FALSE;
@@ -3938,8 +3940,8 @@ boolean ConcurrentCardInfoRead(void)
 	override_cred = prepare_creds();
 	if (!override_cred)
 		return -ENOMEM;
-	override_cred->fsuid = 0;
-	override_cred->fsgid = 0;
+	override_cred->fsuid = GLOBAL_ROOT_UID;
+	override_cred->fsgid = GLOBAL_ROOT_GID;
 	old_cred = (struct cred *)override_creds(override_cred);
 #endif
 	orgfs = get_fs();
