@@ -485,8 +485,7 @@ static struct net_device_stats *mii_get_stats(struct net_device *netdev)
 	return &pAd->net_stats;
 }
 
-
-static int __init rlk_inic_init (void)
+static int __init rlk_inic_init(void)
 {
 	int i, rc = 0;
 	char name[8];

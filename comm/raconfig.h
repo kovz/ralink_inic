@@ -17,6 +17,7 @@
 #include <linux/notifier.h>
 #include <net/iw_handler.h>
 
+#include <linux/kthread.h>
 /*
  *	IEEE 802.3 Ethernet magic constants.  The frame sizes omit the preamble
  *	and FCS/CRC (frame check sequence). 
