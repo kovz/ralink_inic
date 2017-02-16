@@ -1,0 +1,115 @@
+menuconfig RALINK_INIC
+	tristate "Ralink iNIC interface driver support"
+	depends on MAC80211
+	---help---
+	  This will enable the support for the Ralink iNIC drivers.
+
+if RALINK_INIC
+
+choice
+	prompt "Select iNIC chip"
+	
+	config CHIP_2880
+		bool "2880"
+		
+	config CHIP_3052
+		bool "3052"
+	
+	config CHIP_3662
+		bool "3662"
+		
+	config CHIP_3883
+		bool "3883"
+		
+	config CHIP_3352
+		bool "3352"
+		
+	config CHIP_5350
+		bool "5350"
+
+endchoice
+
+config CHIP_NAME
+	string
+	default "2880" if CHIP_2880
+	default "3052" if CHIP_3052
+	default "3662" if CHIP_3662
+	default "3883" if CHIP_3883
+	default "3352" if CHIP_3352
+	default "5350" if CHIP_5350
+
+choice 
+	prompt "iNIC interface type"
+	
+	config INF_TYPE_USB
+		bool "USB"
+		depends on (CHIP_3052 || CHIP_3662 || CHIP_3883 || CHIP_3352 || CHIP_5350)
+		
+	config INF_TYPE_MII
+		bool "Eth"
+		
+	config INF_TYPE_PCI
+		bool "PCI"
+		depends on (CHIP_2880 || CHIP_3662 || CHIP_3883)
+			
+	config INF_TYPE_PCIE
+		bool "PCIE"
+		depends on (CHIP_3662 || CHIP_3883)
+	
+endchoice
+
+config INF_TYPE
+	string
+	default "MII" if INF_TYPE_MII
+	default "USB" if INF_TYPE_USB
+	default "PCI" if INF_TYPE_PCI
+	default "PCIE" if INF_TYPE_PCIE
+ 
+config CONCURRENT_INIC_SUPPORT
+	bool "Concurrency support"
+	depends on(CHIP_3662 || CHIP_3883)
+
+config NEW_MBSS_SUPPORT
+	bool "New MBSS support"
+	depends on(CHIP_3662 || CHIP_3883)
+
+config AGGREGATION_ENABLE
+	bool "Aggregation enable"
+	depends on INF_TYPE_USB
+
+config RETRY_PKT_SEND
+	bool "Retry send packet"
+	depends on(CHIP_3662 || CHIP_3883)
+
+config PHASE_LOAD_CODE
+	bool "Add load FW phase"
+	depends on(CHIP_3662 || CHIP_3883)
+
+config NM_SUPPORT
+	bool "Enable NM support"
+
+config BRIDGE
+	bool "Enable bridge support"
+	
+config MC_SUPPORT
+	bool "Enable multiply card support"
+	depends on (INF_TYPE_PCI || INF_TYPE_PCIE)
+
+
+config PCI_FORCE_DMA
+	bool "Force DMA usage"
+	depends on (INF_TYPE_PCI || INF_TYPE_PCIE)
+
+config PREEMPT
+	bool "Enable preemtive"
+	
+
+config WOWLAN_SUPPORT
+	bool "Enable Wake On WLAN "
+
+#CONFIG_WIRELESS_EXT
+
+#CONFIG_BRIDGE_MODULE
+
+#CONFIG_IFX_ALG_QOS
+endif
