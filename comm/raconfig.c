@@ -281,10 +281,6 @@ void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *
 
 #ifdef NM_SUPPORT
 	pAd->RaCfgObj.bWpaSupplicantUp = TRUE;
-#if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
-	// please assign your GPIO hardware reset handler here
-	pAd->hardware_reset = 0;
-#endif
 	hardware_reset(pAd, 0);
 	udelay(10000);
 	hardware_reset(pAd, 1);

@@ -105,7 +105,7 @@ config PREEMPT
 	
 
 config WOWLAN_SUPPORT
-	bool "Enable Wake On WLAN "
+	bool "Enable Wake On WLAN"
 
 #CONFIG_WIRELESS_EXT
 

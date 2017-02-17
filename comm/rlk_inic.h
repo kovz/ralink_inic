@@ -4,9 +4,8 @@
 #include <linux/kernel.h>
 #include <linux/compiler.h>
 #include <linux/module.h>
-//#include <linux/config.h>
-//#include <linux/autoconf.h>//peter : for FC6
-#include <generated/autoconf.h>//peter : for FC6
+#include <linux/kconfig.h>
+
 #include <linux/version.h>
 #include <linux/sched.h>
 #include <linux/byteorder/generic.h>
@@ -17,7 +16,6 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/wait.h>
-//#include <linux/pci.h>
 #include <linux/mii.h>
 #include <linux/netdevice.h>
 #include <linux/if_ether.h>
@@ -32,11 +30,13 @@
 #include <net/iw_handler.h>
 #if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 #include <linux/cred.h>
+#include <linux/if_bridge.h>
 #endif
 #include <asm/types.h>
 #include <asm/io.h>
 #include <asm/irq.h>
 #include <asm/uaccess.h>
+#include <asm-generic/current.h>
 
 #include "rlk_inic_def.h"
 
