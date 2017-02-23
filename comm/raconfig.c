@@ -213,7 +213,7 @@ static void RaCfgAddHeartBeatTimer(iNIC_PRIVATE *pAd)
 
 	RTMP_SEM_LOCK(&pAd->RaCfgObj.timerLock);
 
-	if (pAd->RaCfgObj.threads_exit ||
+	if (/*pAd->RaCfgObj.threads_exit || */
 		pAd->RaCfgObj.fw_upload_counter >= max_fw_upload)
 	{
 		RTMP_SEM_UNLOCK(&pAd->RaCfgObj.timerLock);
@@ -366,7 +366,6 @@ void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *
 
 	pAd->RaCfgObj.bRestartiNIC = FALSE;
 
-	pAd->RaCfgObj.threads_exit = 0;
 	pAd->RaCfgObj.wait_completed = 0;
 	init_waitqueue_head(&pAd->RaCfgObj.waitQH);
 
@@ -468,52 +467,29 @@ void RaCfgExit(iNIC_PRIVATE *pAd)
 static void RaCfgKillThread(iNIC_PRIVATE *pAd)
 {
 	int ret;
-
-	pAd->RaCfgObj.threads_exit = 1;
-	up(&pAd->RaCfgObj.taskSem);   
-	up(&pAd->RaCfgObj.backlogSem);   
-
-	if (pAd->RaCfgObj.task_thread_pid > 0)
-	{
-		ret = KILL_THREAD_PID (GET_PID(pAd->RaCfgObj.task_thread_pid), SIGTERM, 1);
-		if (ret)
-		{
-			printk (KERN_WARNING "unable to kill RaCfg task thread, pid=%d, ret=%d!\n",
-					pAd->RaCfgObj.task_thread_pid, ret);
-		}
-		wait_for_completion(&pAd->RaCfgObj.TaskThreadComplete);
-		pAd->RaCfgObj.task_thread_pid = -1;
-	}
-
-	if (pAd->RaCfgObj.backlog_thread_pid > 0)
-	{
-		ret = KILL_THREAD_PID (GET_PID(pAd->RaCfgObj.backlog_thread_pid), SIGTERM, 1);
-		if (ret)
-		{
-			printk (KERN_WARNING "unable to kill RaCfg backlog thread, pid=%d, ret=%d!\n",
-					pAd->RaCfgObj.backlog_thread_pid, ret);
-		}
-		wait_for_completion (&pAd->RaCfgObj.BacklogThreadComplete);
-		pAd->RaCfgObj.backlog_thread_pid = -1;
-	}
-
-	//wait_for_completion (&pAd->notify);
-
+	kthread_stop(pAd->RaCfgObj.config_thread_task);
 	printk("RaCfgTaskThread Complete and Exit\n");
+	kthread_stop(pAd->RaCfgObj.backlog_thread_task);
 	printk("RaCfgBacklogThread Complete and Exit\n");
 }
 
 static void RaCfgInitThreads(iNIC_PRIVATE *pAd)
 {
 	printk("============= Init Thread ===================\n");
-	pAd->RaCfgObj.threads_exit = 0;
 	init_completion(&pAd->RaCfgObj.TaskThreadComplete);
 	init_completion(&pAd->RaCfgObj.BacklogThreadComplete);
-	pAd->RaCfgObj.task_thread_pid = kernel_thread(RaCfgTaskThread, pAd, CLONE_VM);
-	pAd->RaCfgObj.backlog_thread_pid = kernel_thread(RaCfgBacklogThread, pAd, CLONE_VM);
-	printk("RacfgTaskThread pid = %d\n", pAd->RaCfgObj.task_thread_pid);
-	printk("RacfgBacklogThread pid = %d\n", pAd->RaCfgObj.backlog_thread_pid);
-
+	pAd->RaCfgObj.config_thread_task = kthread_run(RaCfgTaskThread, pAd, "RaCfg Task");
+	if(pAd->RaCfgObj.config_thread_task){
+		printk("RacfgTaskThread pid = %d\n", pAd->RaCfgObj.config_thread_task->pid);
+	} else {
+		//TODO : error handling
+	}
+	pAd->RaCfgObj.backlog_thread_task = kthread_run(RaCfgBacklogThread, pAd, "RaCfg Backlog");
+	if (pAd->RaCfgObj.backlog_thread_task){
+		printk("RacfgBacklogThread pid = %d\n", pAd->RaCfgObj.backlog_thread_task->pid);
+	} else {
+		//TODO : error handling
+	}
 }
 
 
@@ -526,7 +502,7 @@ static void RaCfgHeartBeatTimeOut(uintptr_t arg)
 		return;
 #endif
 
-	if (pAd->RaCfgObj.threads_exit)
+	if (pAd->RaCfgObj.config_thread_task->state != TASK_RUNNING)
 		return;
 
 	if (pAd->RaCfgObj.fw_upload_counter >= max_fw_upload)
@@ -857,17 +833,17 @@ void RaCfgStateReset(iNIC_PRIVATE *pAd)
 static int RaCfgBacklogThread(void *arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg; 
-
-	KERNEL_THREAD_BEGIN("RaCfg Backlog");
-
-	while (!pAd->RaCfgObj.threads_exit)
+	// Allow the SIGKILL signal
+	allow_signal(SIGKILL);
+	while (!kthread_should_stop()
+			&& !signal_pending(current))
 	{
 		RaCfgDequeue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem); 
 	}
 
-	pAd->RaCfgObj.backlog_thread_pid = -1;  
-	complete_and_exit(&pAd->RaCfgObj.BacklogThreadComplete, 0);
+	do_exit(0);
 	printk("%s: RaCfgBacklogThread Exit Complete\n", pAd->RaCfgObj.MainDev->name);
+	return 0;
 }
 
 static int RaCfgTaskThread(void *arg)
@@ -881,9 +857,9 @@ static int RaCfgTaskThread(void *arg)
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg; 
 	u8  *buffer=NULL, *ptr;
 
-	KERNEL_THREAD_BEGIN("RaCfg Task");
+	allow_signal(SIGKILL);
 
-	while (!pAd->RaCfgObj.threads_exit)
+	while (!kthread_should_stop() && !signal_pending(current))
 	{
 		skb = (struct sk_buff *)RaCfgDequeue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem); 
 		//printk("Dequeue Feedback resp...\n");
@@ -1097,8 +1073,7 @@ static int RaCfgTaskThread(void *arg)
 		kfree_skb(skb);
 	}
 
-	pAd->RaCfgObj.task_thread_pid = -1;  
-	complete_and_exit(&pAd->RaCfgObj.TaskThreadComplete, 0);
+	do_exit(0);
 	printk("%s: RaCfgTaskThread Exit Complete\n", pAd->RaCfgObj.MainDev->name);
 	return 0;
 }

@@ -362,10 +362,8 @@ typedef struct _RETRY_PKT_INFO
 typedef struct __RACFG_OBJECT
 {
 	struct net_device           *MainDev;
-	struct completion           TaskThreadComplete;
-	struct completion           BacklogThreadComplete;
-	pid_t                       task_thread_pid;
-	pid_t                       backlog_thread_pid;
+	struct task_struct          *config_thread_task;
+	struct task_struct          *backlog_thread_task;
 	unsigned char               opmode;						// 0: STA, 1: AP
 	boolean                     bBridge;					// use built-in bridge or not ?
     boolean                     bChkSumOff;
@@ -381,7 +379,6 @@ typedef struct __RACFG_OBJECT
 #ifdef MESH_SUPPORT
 	MULTISSID_STRUCT            MESH[MAX_MESH_NUM];
 #endif // MESH_SUPPORT //
-	boolean                     threads_exit;
 	boolean                     flg_is_open;
 	boolean                     flg_mbss_init;
 	boolean                     flg_wds_init;
