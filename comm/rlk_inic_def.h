@@ -16,6 +16,7 @@
 #include <linux/list.h>
 #include <linux/if_bridge.h>
 #include <linux/netdevice.h>
+#include <linux/kfifo.h>
 #include <net/iw_handler.h>
 #include "crc.h"
 
@@ -286,12 +287,19 @@ typedef spinlock_t RTMP_SPIN_LOCK;
 }
 
 typedef void (*PRaCfgFunc)(uintptr_t);
+typedef void (*pHndlFunc)(void*);
 
 typedef struct _racfg_task
 {
 	PRaCfgFunc func;
     uintptr_t arg;
 } RaCfgTask;
+
+typedef struct _hndl_task
+{
+	pHndlFunc func;
+    void * arg;
+} HndlTask;
 
 typedef struct _racfg_queue
 {
@@ -408,8 +416,11 @@ typedef struct __RACFG_OBJECT
 	struct semaphore			taskSem; 
 	struct semaphore			backlogSem; 
 	RaCfgQueue					taskQueue;
+	DECLARE_KFIFO(task_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
 	RaCfgQueue					backlogQueue;
-	RaCfgQueue                  waitQueue; 
+	DECLARE_KFIFO(backlog_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
+	RaCfgQueue                  waitQueue;
+	DECLARE_KFIFO(wait_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
 
 	u8                          packet[1536];
 	u8                          wsc_updated_profile[MAX_PROFILE_SIZE];

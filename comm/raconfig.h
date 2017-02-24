@@ -68,8 +68,8 @@ struct reg_str
 
 typedef struct arg_box
 {
-    uintptr_t arg1;
-    uintptr_t arg2;
+    void *arg1;
+    void *arg2;
 } ArgBox;
 
 
@@ -422,11 +422,11 @@ int rlk_inic_mesh_close(iNIC_PRIVATE *ad_p);
 int rlk_inic_open(struct net_device *dev);
 int rlk_inic_close (struct net_device *dev);
 
-void rlk_inic_mbss_restart(uintptr_t arg);
-void rlk_inic_wds_restart(uintptr_t arg);
-void rlk_inic_apcli_restart(uintptr_t arg);
+void rlk_inic_mbss_restart(void *arg);
+void rlk_inic_wds_restart(void *arg);
+void rlk_inic_apcli_restart(void *arg);
 #ifdef MESH_SUPPORT
-void rlk_inic_mesh_restart(uintptr_t arg);
+void rlk_inic_mesh_restart(void *arg);
 #endif // MESH_SUPPORT //
 
 #ifdef MULTIPLE_CARD_SUPPORT
@@ -452,7 +452,7 @@ extern char *mac2;
 extern char *root;
 #endif
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
-extern char *miimaster;
+//extern char *miimaster;
 extern int syncmiimac;
 void IgmpTunnelRcvPkt(char *buff, int len, int src_port);
 int IgmpTunnelSendPkt(struct net_device *net_dev, char *buff, int len);

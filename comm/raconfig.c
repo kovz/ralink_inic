@@ -56,12 +56,12 @@ CONCURRENT_OBJECT ConcurrentObj;
 
 static void send_racfg_cmd(iNIC_PRIVATE *pAd, char *, int);
 
-static int  RaCfgEnqueue(iNIC_PRIVATE *pAd, RaCfgQueue *, struct semaphore *, PRaCfgFunc func, uintptr_t arg);
-static uintptr_t RaCfgDequeue(iNIC_PRIVATE *pAd, RaCfgQueue *, struct semaphore *);
-static int  RaCfgQueueFull(RaCfgQueue  *queue);
-static int  RaCfgQueueEmpty(RaCfgQueue *queue); 
-static void RaCfgQueueInit(RaCfgQueue  *queue, char *name);
-static void RaCfgQueueReset(RaCfgQueue *queue, struct semaphore *); 
+//static int  RaCfgEnqueue(iNIC_PRIVATE *pAd, RaCfgQueue *, struct semaphore *, PRaCfgFunc func, uintptr_t arg);
+//static uintptr_t RaCfgDequeue(iNIC_PRIVATE *pAd, RaCfgQueue *, struct semaphore *);
+//static int  RaCfgQueueFull(RaCfgQueue  *queue);
+//static int  RaCfgQueueEmpty(RaCfgQueue *queue);
+//static void RaCfgQueueInit(RaCfgQueue  *queue, char *name);
+//static void RaCfgQueueReset(RaCfgQueue *queue, struct semaphore *);
 
 static int  RaCfgTaskThread(void *arg);
 static int  RaCfgBacklogThread(void *arg);
@@ -72,15 +72,15 @@ static void _upload_firmware(iNIC_PRIVATE *pAd);
 static void _upload_profile(iNIC_PRIVATE *pAd);
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-static void RaCfgConcurrentOpenAction(uintptr_t);
+static void RaCfgConcurrentOpenAction(void *);
 #else // CONFIG_CONCURRENT_INIC_SUPPORT //
-static void RaCfgOpenAction(uintptr_t);
+static void RaCfgOpenAction(void *);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-static void RaCfgInitCfgAction(uintptr_t);
-static void RaCfgUploadAction(uintptr_t);
-static void RaCfgRestartiNIC(uintptr_t);
+static void RaCfgInitCfgAction(void *);
+static void RaCfgUploadAction(void *);
+static void RaCfgRestartiNIC(void *);
 static void RaCfgEnqueueRestart(iNIC_PRIVATE *pAd);
-static void RaCfgHeartBeatTimeOut(uintptr_t);
+static void RaCfgHeartBeatTimeOut(unsigned long);
 static void RaCfgInitThreads(iNIC_PRIVATE *pAd);
 static void RaCfgKillThread(iNIC_PRIVATE *pAd);
 void ReadCrcHeader(CRC_HEADER *hdr, unsigned char *buffer);
@@ -230,7 +230,7 @@ static void RaCfgAddHeartBeatTimer(iNIC_PRIVATE *pAd)
 	{
 		init_timer(&pAd->RaCfgObj.heartBeat);
 		pAd->RaCfgObj.heartBeat.function = RaCfgHeartBeatTimeOut;
-		pAd->RaCfgObj.heartBeat.data = (uintptr_t)pAd;
+		pAd->RaCfgObj.heartBeat.data = (unsigned long)pAd;
 	}
 	mod_timer(&pAd->RaCfgObj.heartBeat, jiffies + HEART_BEAT_TIMEOUT * HZ);
 	RTMP_SEM_UNLOCK(&pAd->RaCfgObj.timerLock);
@@ -371,7 +371,7 @@ void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *
 
 
 	sema_init(&pAd->RaCfgObj.taskSem, 0);
-  sema_init(&pAd->RaCfgObj.backlogSem, 0);
+	sema_init(&pAd->RaCfgObj.backlogSem, 0);
 
 	RTMP_SEM_INIT(&pAd->RaCfgObj.waitLock);
 	RTMP_SEM_INIT(&pAd->RaCfgObj.timerLock);
@@ -380,9 +380,12 @@ void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *
 	RTMP_SEM_INIT(&pAd->RaCfgObj.WowInbandSignalTimerLock);
 #endif // #ifdef WOWLAN_SUPPORT // 
 
-	RaCfgQueueInit(&pAd->RaCfgObj.taskQueue, "task");
-	RaCfgQueueInit(&pAd->RaCfgObj.backlogQueue, "backlog");
-	RaCfgQueueInit(&pAd->RaCfgObj.waitQueue, "wait");
+//	RaCfgQueueInit(&pAd->RaCfgObj.taskQueue, "task");
+	INIT_KFIFO(pAd->RaCfgObj.task_fifo);
+//	RaCfgQueueInit(&pAd->RaCfgObj.backlogQueue, "backlog");
+	INIT_KFIFO(pAd->RaCfgObj.backlog_fifo);
+//	RaCfgQueueInit(&pAd->RaCfgObj.waitQueue, "wait");
+	INIT_KFIFO(pAd->RaCfgObj.wait_fifo);
 
 #ifdef TEST_BOOT_RECOVER
 	pAd->RaCfgObj.cfg_simulated = FALSE;
@@ -466,7 +469,6 @@ void RaCfgExit(iNIC_PRIVATE *pAd)
 
 static void RaCfgKillThread(iNIC_PRIVATE *pAd)
 {
-	int ret;
 	kthread_stop(pAd->RaCfgObj.config_thread_task);
 	printk("RaCfgTaskThread Complete and Exit\n");
 	kthread_stop(pAd->RaCfgObj.backlog_thread_task);
@@ -476,8 +478,8 @@ static void RaCfgKillThread(iNIC_PRIVATE *pAd)
 static void RaCfgInitThreads(iNIC_PRIVATE *pAd)
 {
 	printk("============= Init Thread ===================\n");
-	init_completion(&pAd->RaCfgObj.TaskThreadComplete);
-	init_completion(&pAd->RaCfgObj.BacklogThreadComplete);
+//	init_completion(&pAd->RaCfgObj.TaskThreadComplete);
+//	init_completion(&pAd->RaCfgObj.BacklogThreadComplete);
 	pAd->RaCfgObj.config_thread_task = kthread_run(RaCfgTaskThread, pAd, "RaCfg Task");
 	if(pAd->RaCfgObj.config_thread_task){
 		printk("RacfgTaskThread pid = %d\n", pAd->RaCfgObj.config_thread_task->pid);
@@ -493,9 +495,10 @@ static void RaCfgInitThreads(iNIC_PRIVATE *pAd)
 }
 
 
-static void RaCfgHeartBeatTimeOut(uintptr_t arg)
+static void RaCfgHeartBeatTimeOut(unsigned long arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg;
+	HndlTask new_task;
 
 #ifndef NM_SUPPORT
 	if (!NETIF_IS_UP(pAd->RaCfgObj.MainDev))
@@ -568,7 +571,10 @@ static void RaCfgHeartBeatTimeOut(uintptr_t arg)
 		pAd->RaCfgObj.firm_simulated = FALSE;
 #endif
 
-		RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, RaCfgRestartiNIC, (uintptr_t)pAd);
+		//RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, RaCfgRestartiNIC, (uintptr_t)pAd);
+		new_task.func = RaCfgRestartiNIC;
+		new_task.arg = pAd;
+		kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
 	}
 
 	pAd->RaCfgObj.HeartBeatCount = 0;   
@@ -577,17 +583,26 @@ static void RaCfgHeartBeatTimeOut(uintptr_t arg)
 
 static void RaCfgEnqueueRestart(iNIC_PRIVATE *pAd)
 {
-
-	RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_mbss_restart, (uintptr_t)pAd);
-	RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_wds_restart, (uintptr_t)pAd);
-	RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_apcli_restart, (uintptr_t)pAd);
+	HndlTask new_task;
+	new_task.arg = pAd;
+	new_task.func = rlk_inic_mbss_restart;
+	//RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_mbss_restart, (uintptr_t)pAd);
+	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
+	//RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_wds_restart, (uintptr_t)pAd);
+	new_task.func = rlk_inic_wds_restart;
+	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
+	//RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_apcli_restart, (uintptr_t)pAd);
+	new_task.func = rlk_inic_apcli_restart;
+	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
 #ifdef MESH_SUPPORT
-	RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_mesh_restart, (uintptr_t)pAd);
+	//RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, rlk_inic_mesh_restart, (uintptr_t)pAd);
+	new_task.func = rlk_inic_mesh_restart
+	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
 #endif // MESH_SUPPORT // 
 
 }
 
-static void RaCfgRestartiNIC(uintptr_t arg)
+static void RaCfgRestartiNIC(void *arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg;
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
@@ -723,7 +738,7 @@ void RaCfgSetUp(iNIC_PRIVATE *pAd, struct net_device *dev)
 	// Executing in task thread implies => boot fail 
 	// => don't wait for MAC (iNIC not booted yet, no MAC returned)
 	// => at the same time, we avoid blocking task thread
-	if (current->pid != pAd->RaCfgObj.task_thread_pid)
+	if (current->pid != pAd->RaCfgObj.config_thread_task->pid)
 	{
 		// system thread or backlog (heartbeat time out)
 		get_mac_from_inic(pAd);
@@ -824,9 +839,12 @@ void RaCfgStateReset(iNIC_PRIVATE *pAd)
 #endif
 #endif
 	pAd->RaCfgObj.wait_completed = 0;
-	RaCfgQueueReset(&pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem);
-	RaCfgQueueReset(&pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem);
-	RaCfgQueueReset(&pAd->RaCfgObj.waitQueue, NULL);
+//	RaCfgQueueReset(&pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem);
+	kfifo_reset(&pAd->RaCfgObj.task_fifo);
+//	RaCfgQueueReset(&pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem);
+	kfifo_reset(&pAd->RaCfgObj.backlog_fifo);
+//	RaCfgQueueReset(&pAd->RaCfgObj.waitQueue, NULL);
+	kfifo_reset(&pAd->RaCfgObj.wait_fifo);
 }
 
 
@@ -838,7 +856,11 @@ static int RaCfgBacklogThread(void *arg)
 	while (!kthread_should_stop()
 			&& !signal_pending(current))
 	{
-		RaCfgDequeue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem); 
+		//RaCfgDequeue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem);
+		HndlTask curr_task;
+		kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task);
+		if(curr_task.func)
+			curr_task.func(curr_task.arg);
 	}
 
 	do_exit(0);
@@ -856,17 +878,26 @@ static int RaCfgTaskThread(void *arg)
 	u32  event;
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg; 
 	u8  *buffer=NULL, *ptr;
+	HndlTask curr_task;
 
 	allow_signal(SIGKILL);
 
 	while (!kthread_should_stop() && !signal_pending(current))
 	{
-		skb = (struct sk_buff *)RaCfgDequeue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem); 
-		//printk("Dequeue Feedback resp...\n");
-		if (!skb)
-		{
-			// Queue elem may be a task func, has been invoked in dequeue.
+//		skb = (struct sk_buff *)RaCfgDequeue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem);
+//		//printk("Dequeue Feedback resp...\n");
+//		if (!skb)
+//		{
+//			// Queue elem may be a task func, has been invoked in dequeue.
+//			continue;
+//		}
+
+		kfifo_get(&pAd->RaCfgObj.task_fifo, &curr_task);
+		if(curr_task.func){
+			curr_task.func(curr_task.arg);
 			continue;
+		} else {
+			skb = (struct sk_buff *)arg;
 		}
 		// feedback command ...
 		p_racfgh =  (struct racfghdr *)skb->data;
@@ -1143,24 +1174,24 @@ void RaCfgWriteFile(iNIC_PRIVATE *pAd, FileHandle *fh, char *buff, int len)
  *  \post
  *  \note   Because this is done only once (at the init stage), no need to be locked
  */
-static void RaCfgQueueInit(RaCfgQueue *queue, char *name) 
-{
-	int i;
-
-	RTMP_SEM_INIT(&queue->lock);
-
-	strncpy(queue->name, name, sizeof(queue->name)-1);
-	queue->name[sizeof(queue->name)-1]='\0';
-	queue->num  = 0;
-	queue->head = 0;
-	queue->tail = 0;
-
-	for (i = 0; i < MAX_LEN_OF_RACFG_QUEUE; i++)
-	{
-		queue->entry[i].func = NULL;
-		queue->entry[i].arg  = 0;
-	}
-}
+//static void RaCfgQueueInit(RaCfgQueue *queue, char *name)
+//{
+//	int i;
+//
+//	RTMP_SEM_INIT(&queue->lock);
+//
+//	strncpy(queue->name, name, sizeof(queue->name)-1);
+//	queue->name[sizeof(queue->name)-1]='\0';
+//	queue->num  = 0;
+//	queue->head = 0;
+//	queue->tail = 0;
+//
+//	for (i = 0; i < MAX_LEN_OF_RACFG_QUEUE; i++)
+//	{
+//		queue->entry[i].func = NULL;
+//		queue->entry[i].arg  = 0;
+//	}
+//}
 
 /*! \brief   The destructor of RaCfg Queue
  *  \param 
@@ -1169,30 +1200,30 @@ static void RaCfgQueueInit(RaCfgQueue *queue, char *name)
  *  \post
  *  \note   Clear RaCfg Queue, Set queue->num to Zero.
  */
-static void RaCfgQueueReset(RaCfgQueue *queue, struct semaphore *sem) 
-{
-	int i;
-
-	RTMP_SEM_LOCK(&(queue->lock));
-	queue->num  = 0;
-	queue->head = 0;
-	queue->tail = 0;
-
-	for (i = 0; i < MAX_LEN_OF_RACFG_QUEUE; i++)
-	{
-		queue->entry[i].func = NULL;
-		queue->entry[i].arg  = 0;
-	}
-
-	RTMP_SEM_UNLOCK(&(queue->lock));
-
-	if (sem)
-	{
-		// clear sem->count
-		while (!down_trylock(sem));
-	}
-
-}
+//static void RaCfgQueueReset(RaCfgQueue *queue, struct semaphore *sem)
+//{
+//	int i;
+//
+//	RTMP_SEM_LOCK(&(queue->lock));
+//	queue->num  = 0;
+//	queue->head = 0;
+//	queue->tail = 0;
+//
+//	for (i = 0; i < MAX_LEN_OF_RACFG_QUEUE; i++)
+//	{
+//		queue->entry[i].func = NULL;
+//		queue->entry[i].arg  = 0;
+//	}
+//
+//	RTMP_SEM_UNLOCK(&(queue->lock));
+//
+//	if (sem)
+//	{
+//		// clear sem->count
+//		while (!down_trylock(sem));
+//	}
+//
+//}
 
 /*! \brief   Enqueue a task for other threads
  *  \param  *Func     The task pointer
@@ -1202,34 +1233,34 @@ static void RaCfgQueueReset(RaCfgQueue *queue, struct semaphore *sem)
  *  \post
  *  \note    The arg has to be initialized
  */
-static int RaCfgEnqueue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semaphore *sem, PRaCfgFunc func, uintptr_t arg)
-{
-	int tail;
-
-	if (RaCfgQueueFull(queue))
-	{
-		printk("RaCfgEnqueue: full (%d tasks pending in %s), task dropped.\n", 
-			   queue->num, queue->name);
-		return 1;
-	}
-
-	RTMP_SEM_LOCK(&(queue->lock));
-	tail = queue->tail;
-	queue->tail++;
-	queue->num++;
-	if (queue->tail == MAX_LEN_OF_RACFG_QUEUE)
-	{
-		queue->tail = 0;
-	}
-
-	queue->entry[tail].func = func;
-	queue->entry[tail].arg  = arg;
-
-	RTMP_SEM_UNLOCK(&(queue->lock));
-
-	if (sem) up(sem);
-	return 0;
-}
+//static int RaCfgEnqueue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semaphore *sem, PRaCfgFunc func, uintptr_t arg)
+//{
+//	int tail;
+//
+//	if (RaCfgQueueFull(queue))
+//	{
+//		printk("RaCfgEnqueue: full (%d tasks pending in %s), task dropped.\n",
+//			   queue->num, queue->name);
+//		return 1;
+//	}
+//
+//	RTMP_SEM_LOCK(&(queue->lock));
+//	tail = queue->tail;
+//	queue->tail++;
+//	queue->num++;
+//	if (queue->tail == MAX_LEN_OF_RACFG_QUEUE)
+//	{
+//		queue->tail = 0;
+//	}
+//
+//	queue->entry[tail].func = func;
+//	queue->entry[tail].arg  = arg;
+//
+//	RTMP_SEM_UNLOCK(&(queue->lock));
+//
+//	if (sem) up(sem);
+//	return 0;
+//}
 
 /*! \brief   Dequeue a task from the RaCfg Queue, and execute it
  *  \param  *Elem     The task dequeued from RaCfgQueue
@@ -1240,52 +1271,52 @@ static int RaCfgEnqueue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semaphore *
  IRQL = DISPATCH_LEVEL
 
  */
-static uintptr_t RaCfgDequeue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semaphore *sem)
-{
-	PRaCfgFunc task;
-	uintptr_t arg = 0;
-
-	if (sem)
-	{
-		if (down_interruptible(sem) == -EINTR)
-		{
-			// Catch System Reset Signal
-			printk("\n\nNote!! Signal caught, all threads broken...\n\n");
-			pAd->RaCfgObj.threads_exit = 1;
-			return arg;
-		}
-		else
-		{
-			if (pAd->RaCfgObj.threads_exit)
-			{
-				printk("ERROR! all threads has been exited!\n");
-				return arg;
-			}
-
-		}
-	}
-	if (queue->num == 0)
-	{
-		printk("ERROR! RaCfgDequeue while queue num=%d\n", queue->num);
-		return 0;
-	}
-
-
-	RTMP_SEM_LOCK(&(queue->lock));
-	task = queue->entry[queue->head].func;
-	arg  = queue->entry[queue->head].arg;
-	queue->num--;
-	queue->head++;
-	if (queue->head == MAX_LEN_OF_RACFG_QUEUE)
-		queue->head = 0;
-
-	RTMP_SEM_UNLOCK(&(queue->lock));
-
-	if (!task) return arg;
-
-	task(arg);
-	return 0;
-}
+//static uintptr_t RaCfgDequeue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semaphore *sem)
+//{
+//	PRaCfgFunc task;
+//	uintptr_t arg = 0;
+//
+//	if (sem)
+//	{
+//		if (down_interruptible(sem) == -EINTR)
+//		{
+//			// Catch System Reset Signal
+//			printk("\n\nNote!! Signal caught, all threads broken...\n\n");
+//			pAd->RaCfgObj.threads_exit = 1;
+//			return arg;
+//		}
+//		else
+//		{
+//			if (pAd->RaCfgObj.threads_exit)
+//			{
+//				printk("ERROR! all threads has been exited!\n");
+//				return arg;
+//			}
+//
+//		}
+//	}
+//	if (queue->num == 0)
+//	{
+//		printk("ERROR! RaCfgDequeue while queue num=%d\n", queue->num);
+//		return 0;
+//	}
+//
+//
+//	RTMP_SEM_LOCK(&(queue->lock));
+//	task = queue->entry[queue->head].func;
+//	arg  = queue->entry[queue->head].arg;
+//	queue->num--;
+//	queue->head++;
+//	if (queue->head == MAX_LEN_OF_RACFG_QUEUE)
+//		queue->head = 0;
+//
+//	RTMP_SEM_UNLOCK(&(queue->lock));
+//
+//	if (!task) return arg;
+//
+//	task(arg);
+//	return 0;
+//}
 
 
 /*! \brief   test   if the RaCfg Queue is full
@@ -1294,14 +1325,14 @@ static uintptr_t RaCfgDequeue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semap
  *  \pre
  *  \post
  */
-static int RaCfgQueueFull(RaCfgQueue *queue) 
-{
-	int ans;
-	RTMP_SEM_LOCK(&(queue->lock));
-	ans = (queue->num == MAX_LEN_OF_RACFG_QUEUE ? 1 : 0);
-	RTMP_SEM_UNLOCK(&(queue->lock));
-	return ans;
-}
+//static int RaCfgQueueFull(RaCfgQueue *queue)
+//{
+//	int ans;
+//	RTMP_SEM_LOCK(&(queue->lock));
+//	ans = (queue->num == MAX_LEN_OF_RACFG_QUEUE ? 1 : 0);
+//	RTMP_SEM_UNLOCK(&(queue->lock));
+//	return ans;
+//}
 
 /*! \brief  test if the RaCfgQueue is empty
  *  \param  *queue    The RaCfgQueue
@@ -1309,16 +1340,16 @@ static int RaCfgQueueFull(RaCfgQueue *queue)
  *  \pre
  *  \post
  */
-static int RaCfgQueueEmpty(RaCfgQueue *queue) 
-{
-	int ans;
-
-	RTMP_SEM_LOCK(&(queue->lock));
-	ans = (queue->num == 0 ? 1 : 0);
-	RTMP_SEM_UNLOCK(&(queue->lock));
-
-	return ans;
-}
+//static int RaCfgQueueEmpty(RaCfgQueue *queue)
+//{
+//	int ans;
+//
+//	RTMP_SEM_LOCK(&(queue->lock));
+//	ans = (queue->num == 0 ? 1 : 0);
+//	RTMP_SEM_UNLOCK(&(queue->lock));
+//
+//	return ans;
+//}
 
 static ArgBox *GetArgBox(void)
 {
@@ -1969,7 +2000,7 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 
-static void RaCfgConcurrentOpenAction(uintptr_t arg)
+static void RaCfgConcurrentOpenAction(void *arg)
 {
 
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg;
@@ -2159,7 +2190,7 @@ static void RaCfgOpenAction(uintptr_t arg)
 
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
-static void RaCfgUploadAction(uintptr_t arg) 
+static void RaCfgUploadAction(void *arg)
 {
 	ArgBox *box         = (ArgBox *)arg;
 	iNIC_PRIVATE *pAd   = (iNIC_PRIVATE *)box->arg1;
@@ -2186,7 +2217,7 @@ static void RaCfgUploadAction(uintptr_t arg)
 		//hex_dump("local:", pAd->RaCfgObj.cmp_buf, len);
 		//hex_dump("remote:", data, len);
 		kfree_skb(skb);
-		RaCfgRestartiNIC((uintptr_t) pAd);
+		RaCfgRestartiNIC(pAd);
 		return;
 	}
 	kfree_skb(skb);
@@ -2205,7 +2236,7 @@ static void RaCfgUploadAction(uintptr_t arg)
 	_upload_firmware(pAd);
 
 }
-static void RaCfgInitCfgAction(uintptr_t arg) 
+static void RaCfgInitCfgAction(void * arg)
 {
 	ArgBox *box         = (ArgBox *)arg;
 	iNIC_PRIVATE *pAd   = (iNIC_PRIVATE *)box->arg1;
@@ -2236,7 +2267,7 @@ static void RaCfgInitCfgAction(uintptr_t arg)
 		//hex_dump("local:", pAd->RaCfgObj.test_pool, len);
 		//hex_dump("remote:", data, len);
 		kfree_skb(skb);
-		RaCfgRestartiNIC((uintptr_t) pAd);
+		RaCfgRestartiNIC(pAd);
 		return;
 	}
 
@@ -2326,6 +2357,7 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 	{
 		u16 command_type, command_id, command_seq, len, dev_type, seq;
 		struct sk_buff *skb;
+		HndlTask curr_task;
 
 		if (!pAd->RaCfgObj.wait_completed)
 		{
@@ -2357,7 +2389,8 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 #endif
 		}
 		RTMP_SEM_LOCK(&pAd->RaCfgObj.waitLock);
-		if (RaCfgQueueEmpty(&pAd->RaCfgObj.waitQueue))
+		//if (RaCfgQueueEmpty(&pAd->RaCfgObj.waitQueue))
+		if(kfifo_is_empty(&pAd->RaCfgObj.wait_fifo))
 		{
 			pAd->RaCfgObj.wait_completed = 0;
 			RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
@@ -2365,9 +2398,21 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 			status = -EFAULT;
 			return status;
 		}
-		skb = (struct sk_buff *)RaCfgDequeue(pAd, &pAd->RaCfgObj.waitQueue, NULL); 
+
+		//skb = (struct sk_buff *)RaCfgDequeue(pAd, &pAd->RaCfgObj.waitQueue, NULL);
+
+		kfifo_get(&pAd->RaCfgObj.wait_fifo, &curr_task);
 		pAd->RaCfgObj.wait_completed--;
 		RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
+
+		if(curr_task.func)
+				{
+					curr_task.func(curr_task.arg);
+					printk("Error, no skb!\n");
+					continue;
+		}
+
+		skb = (struct sk_buff *)curr_task.arg;
 
 		if (!skb)
 		{
@@ -2637,17 +2682,22 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 
 void IoctlRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 {
-	int error;
 	//printk("Enqueu IOCTL resp, queue size=%d\n", pAd->RaCfgObj.waitQueue.num);
 
-	error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.waitQueue, NULL, NULL, (uintptr_t) skb);
-
-	RTMP_SEM_LOCK(&pAd->RaCfgObj.waitLock);
-	if (error)
+//	error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.waitQueue, NULL, NULL, (uintptr_t) skb);
+	HndlTask new_task = {NULL, skb};
+	if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
 		kfree_skb(skb);
-	else
+	} else {
+		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
 		pAd->RaCfgObj.wait_completed++;
-	RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
+	}
+//	RTMP_SEM_LOCK(&pAd->RaCfgObj.waitLock);
+//	if (error)
+//		kfree_skb(skb);
+//	else
+//		pAd->RaCfgObj.wait_completed++;
+//	RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
 
 	wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 }
@@ -2656,9 +2706,15 @@ void FeedbackRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 {
 	// Will be dequeued by original IOCTL thread, not RaCfgTaskThread
 	//printk("Enqueue Feedback resp, queue size=%d..\n", pAd->RaCfgObj.taskQueue.num);
-	int error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, NULL, (uintptr_t) skb);
-	if (error)
+//	int error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, NULL, (uintptr_t) skb);
+	HndlTask new_task = {NULL, skb};
+	if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
 		kfree_skb(skb);
+	} else {
+		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
+	}
+//	if (error)
+//		kfree_skb(skb);
 }
 
 #ifdef PCI_NONE_RESET
@@ -2673,25 +2729,46 @@ static int bDropMultiBootNotify = 0;
 //static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, u16 command_id, char *data, u16 len, u16 seq)
 static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 {
-	struct racfghdr *p_racfgh =  (struct racfghdr *) skb->data;
-	u16 command_id   = le16_to_cpu(p_racfgh->command_id);
-	u16 seq          = le16_to_cpu(p_racfgh->sequence);
-	ArgBox *box = NULL;
-	int error = 0;
+	struct racfghdr *p_racfgh;
+	u16 command_id;
+	u16 seq;
+	ArgBox *box;
+	int error;
+	HndlTask new_task;
+
+	if(kfifo_is_full(&pAd->RaCfgObj.task_fifo)){
+			printk("ERROR, kfifo is full\n");
+			kfree_skb(skb);
+			return;
+	}
+
+	p_racfgh =  (struct racfghdr *) skb->data;
+	command_id = le16_to_cpu(p_racfgh->command_id);
+	seq = le16_to_cpu(p_racfgh->sequence);
+	box = NULL;
+	error = 0;
+	new_task.func = NULL;
+	new_task.arg = NULL;
+
+
 
 	switch (command_id)
 	{
 	case RACFG_CMD_BOOT_NOTIFY:
+		new_task.arg = pAd;
 #ifdef PCI_NONE_RESET
 		if (!bDropMultiBootNotify)
 		{
 			DBGPRINT("RACFG_CMD_BOOT_NOTIFY\n");
-#ifdef CONFIG_CONCURRENT_INIC_SUPPORT 		
-		RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgConcurrentOpenAction, (uintptr_t)pAd);
-#else
-			RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgOpenAction, (uintptr_t)pAd);
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
+#ifdef CONFIG_CONCURRENT_INIC_SUPPORT 		
+//			RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgConcurrentOpenAction, (uintptr_t)pAd);
+			new_task.func = RaCfgConcurrentOpenAction;
+#else
+//			RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgOpenAction, (uintptr_t)pAd);
+			new_task.func = RaCfgOpenAction;
+#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+			kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
 			bDropMultiBootNotify = 1;
 		}
 #else
@@ -2702,7 +2779,6 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			    pAd->RaCfgObj.dropNotifyCount++;
 			    if (pAd->RaCfgObj.dropNotifyCount <= MAX_NOTIFY_DROP_NUMBER)
 			    {
-				    kfree_skb(skb);
 				    break;			
 			    }	
 		    }
@@ -2711,49 +2787,71 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 #endif
 		DBGPRINT("RACFG_CMD_BOOT_NOTIFY\n");
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT 		
-		RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgConcurrentOpenAction, (uintptr_t)pAd);
-#else
-		RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgOpenAction, (uintptr_t)pAd);
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+//			RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgConcurrentOpenAction, (uintptr_t)pAd);
+			new_task.func = RaCfgConcurrentOpenAction;
 
+#else
+//			RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgOpenAction, (uintptr_t)pAd);
+			new_task.func = RaCfgOpenAction;
+#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+				kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
 #endif
-		kfree_skb(skb);
 		break;
 	case RACFG_CMD_BOOT_INITCFG:
 		DBGPRINT("RACFG_CMD_BOOT_INITCFG(%d)\n", seq);
-		if (!(box = GetArgBox()))
-		{
-			printk("ERROR, can't alloc ArgBox\n");
-			return;
-		}
-		box->arg1 = (uintptr_t)pAd;
-		box->arg2 = (uintptr_t)skb;
-		error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgInitCfgAction, (uintptr_t)box);
-		if (error)
-		{
-			FreeArgBox(box);
-			kfree_skb(skb);
-		}
+//		if (!(box = GetArgBox()))
+//		{
+//			printk("ERROR, can't alloc ArgBox\n");
+//			return;
+//		}
+//		box->arg1 = pAd;
+//		box->arg2 = skb;
+//		error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgInitCfgAction, (uintptr_t)box);
+			if (!(box = GetArgBox()))
+			{
+				printk("ERROR, can't alloc ArgBox\n");
+				break;
+			}
+			box->arg1 = pAd;
+			box->arg2 = skb;
+			new_task.func = RaCfgInitCfgAction;
+			new_task.arg = box;
+			kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+//		if (error)
+//		{
+//			FreeArgBox(box);
+//			kfree_skb(skb);
+//		}
 		break;
 	case RACFG_CMD_BOOT_UPLOAD:
 		if (seq < 3)
 		{
 			DBGPRINT("RACFG_CMD_BOOT_UPLOAD(%d)\n", seq);
 		}
-		if (!(box = GetArgBox()))
-		{
-			printk("ERROR, can't alloc ArgBox\n");
-			return;
-		}
-		box->arg1 = (uintptr_t)pAd;
-		box->arg2 = (uintptr_t)skb;
-		error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgUploadAction, (uintptr_t)box);
-		if (error)
-		{
-			FreeArgBox(box);
-			kfree_skb(skb);
-		}
+//		if (!(box = GetArgBox()))
+//		{
+//			printk("ERROR, can't alloc ArgBox\n");
+//			return;
+//		}
+//		box->arg1 = (uintptr_t)pAd;
+//		box->arg2 = (uintptr_t)skb;
+//		error = RaCfgEnqueue(pAd, &pAd->RaCfgObj.taskQueue, &pAd->RaCfgObj.taskSem, RaCfgUploadAction, (uintptr_t)box);
 
+			if (!(box = GetArgBox()))
+			{
+				printk("ERROR, can't alloc ArgBox\n");
+				break;
+			}
+			box->arg1 = pAd;
+			box->arg2 = skb;
+			new_task.func = RaCfgUploadAction;
+			new_task.arg = box;
+			kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+//		if (error)
+//		{
+//			FreeArgBox(box);
+//			kfree_skb(skb);
+//		}
 		break;
 	case RACFG_CMD_BOOT_STARTUP:
 		DBGPRINT("RACFG_CMD_BOOT_STARTUP\n");
@@ -2765,17 +2863,13 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				pAd->RaCfgObj.bLoadPhase = TRUE;
 #endif
 #endif
-		kfree_skb(skb);
 		break;
 	case RACFG_CMD_BOOT_REGRD:
-		kfree_skb(skb);
 		break;
 	case RACFG_CMD_BOOT_REGWR:
-		kfree_skb(skb);
 		break;
 	}
-
-
+	kfree_skb(skb);
 }
 
 
@@ -4153,8 +4247,13 @@ static void RaCfgWowInbandTimeout(uintptr_t arg)
 	
 	//wow heart beat is sent, only when CPU is up.
 	if (pAd->RaCfgObj.pm_wow_state == WOW_CPU_UP )
-	RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, RaCfgWowInbandSend, (uintptr_t)pAd);
-
+	//RaCfgEnqueue(pAd, &pAd->RaCfgObj.backlogQueue, &pAd->RaCfgObj.backlogSem, RaCfgWowInbandSend, (uintptr_t)pAd);
+	if(kfifo_is_full(&pAd->RaCfgObj.backlog_fifo)){
+		// TODO : error handling
+	}else {
+		HndlTask new_task = {RaCfgWowInbandSend, pAd};
+		kfifo_in(&pAd->RaCfgObj.backlog_fifo, new_task, 1);
+	}
 	mod_timer(&pAd->RaCfgObj.WowInbandSignalTimer, jiffies + WOW_INBAND_TIMEOUT * HZ);
 }
 

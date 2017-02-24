@@ -22,17 +22,17 @@ inline void free_netdev(struct net_device *dev) {
 //#endif
 
 static int debug = -1;
-static char *mode = "ap";		// ap mode
-static char *mac = "";			// default 00:00:00:00:00:00
+ char *mode = "ap";		// ap mode
+ char *mac = "";			// default 00:00:00:00:00:00
 static int bridge = 1;	// enable built-in bridge
 static int csumoff = 0;	// Enable Checksum Offload over IPv4(TCP, UDP)
-static char *miimaster = "";	// MII master device name
-static int syncmiimac = 1;// Sync mac address with MII, instead of iNIC, if no mac specified
-static int max_fw_upload = 5;	// Max Firmware upload attempt
+ char *miimaster = "";	// MII master device name
+ int syncmiimac = 1;// Sync mac address with MII, instead of iNIC, if no mac specified
+ int max_fw_upload = 5;	// Max Firmware upload attempt
 static int reset_gpio = -1;	// Reset GPIO struct
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-	static char *mac2 = "";			// default 00:00:00:00:00:00
+	char *mac2 = "";			// default 00:00:00:00:00:00
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
 #ifdef DBG
@@ -58,8 +58,7 @@ MODULE_PARM (miimaster, "s");
 MODULE_PARM (syncmiimac, "i");
 #else
 #ifdef DBG
-module_param (root, charp, 0)
-;
+module_param (root, charp, 0);
 MODULE_PARM_DESC(root, DRV_NAME ": firmware and profile path offset");
 #endif
 module_param(debug, int, 0);
@@ -72,7 +71,7 @@ module_param(mac, charp, 0);
 module_param(mac2, charp, 0);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
-module_param(max_fw_upload, int, 5);
+module_param(max_fw_upload, int, 0);
 module_param(miimaster, charp, 0);
 module_param(syncmiimac, int, 1);
 module_param(reset_gpio, int, 0);
@@ -104,7 +103,8 @@ static int mii_close(struct net_device *dev);
 static int mii_send_packet(struct sk_buff *skb, struct net_device *dev);
 
 static int mii_hardware_reset(int op) {
-	return gpio_set_value(reset_gpio, op);
+	gpio_set_value(reset_gpio, op);
+	return op;
 }
 
 extern int SendFragmentPackets(iNIC_PRIVATE *pAd, unsigned short cmd_type,
@@ -484,7 +484,7 @@ static int __init rlk_inic_init(void) {
 		//TODO : freeing something?
 	}
 
-	pAd->hardware_reset = mii_hardware_reset();
+	pAd->hardware_reset = mii_hardware_reset;
 
 #ifdef MODULE
 	printk("%s", version);

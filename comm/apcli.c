@@ -193,7 +193,7 @@ void rlk_inic_apcli_init (
 } /* End of RLK_INIC_APCLI_Init */
 
 
-void rlk_inic_apcli_restart(uintptr_t arg)
+void rlk_inic_apcli_restart(void *arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg;
 	int dev_id = 0;

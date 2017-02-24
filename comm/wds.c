@@ -172,7 +172,7 @@ void rlk_inic_wds_init (
 
 
 
-void rlk_inic_wds_restart(uintptr_t arg)
+void rlk_inic_wds_restart(void *arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *) arg;
 	int dev_id;

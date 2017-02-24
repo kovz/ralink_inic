@@ -188,7 +188,7 @@ void rlk_inic_mbss_init (
 } /* End of RLK_INIC_MBSS_Init */
 
 
-void rlk_inic_mbss_restart(uintptr_t arg)
+void rlk_inic_mbss_restart(void *arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg;
 	int dev_id;
