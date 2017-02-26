@@ -27,11 +27,6 @@
     (((UINT32)(x) & (UINT32) 0x00ff0000UL) >>  8) | \
     (((UINT32)(x) & (UINT32) 0xff000000UL) >> 24) ))
 
-
-#if defined(TWINPASS) || defined(IKANOS_VX_1X0)
-#define	SWAP_PCI_REG_ACCESS 
-#endif 
-
 #ifdef SWAP_PCI_REG_ACCESS
 #define RT_REG_READ32(reg)      SWAP32(readl(rt->regs + (reg)))
 #else

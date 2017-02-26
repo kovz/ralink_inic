@@ -231,24 +231,6 @@ CFLAGS  += -Wall -DMODULE -DBCM63XX -D__MIPSEB__ -mabi=32 -march=mips32 -Wa,-32 
 export KERNELDIR CROSS_COMPILE CC AS LD
 endif
 
-
-ifeq ($(PLATFORM),IKANOS_VX160)
-LINUX_SRC = /opt/ikanos/linux-2.6.18
-#CROSS_COMPILE = /opt/ikanos/buildroot/build_mips_nofpu/staging_dir/bin/mips-linux-
-CROSS_COMPILE = mips-linux-
-CFLAGS := -D__KERNEL__ -DIKANOS_VX_1X0 -I$(LINUX_SRC)/include -I$(LINUX_SRC)/include/asm/gcc -I$(LINUX_SRC)/include/asm-mips/mach-tango2 -I$(LINUX_SRC)/include/asm-mips/mach-tango2 -I$(LINUX_SRC)/include/asm-mips/mach-generic -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -ffreestanding -O2 -fomit-frame-pointer -G 0 -mno-abicalls -fno-pic -pipe -march=lx4189 -Wa, -DMODULE $(WFLAGS) 
-PLATFORM_OBJ := platform/vr_ikans.o
-endif
-
-
-ifeq ($(PLATFORM),IKANOS_VX180)
-LINUX_SRC = /opt/LX_BSP_VX180_5_4_0r1_ALPHA_26DEC07/linux-2.6.18
-#CROSS_COMPILE = /opt/ikanos/buildroot/build_mips_nofpu/staging_dir/bin/mips-linux-uclibc
-CROSS_COMPILE = mips-linux-uclibc-
-CFLAGS := -D__KERNEL__  -DIKANOS_VX_1X0 -mips32r2 -I$(LINUX_SRC)/include -I$(LINUX_SRC)/include/asm/gcc -I$(LINUX_SRC)/include/asm-mips/mach-tango2 -I$(LINUX_SRC)/include/asm-mips/mach-tango2 -I$(LINUX_SRC)/include/asm-mips/mach-generic -Wall -Wundef -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -ffreestanding -O2 -fomit-frame-pointer -G 0 -mno-abicalls -fno-pic -pipe -Wa, -DMODULE $(WFLAGS)
-PLATFORM_OBJ := platform/vr_ikans.o
-endif
-
 ifeq ($(PLATFORM),PIKA)
 KSRC = /opt/alpha_pika/linux-2.4.22
 LINUX_SRC = /opt/alpha_pika/linux-2.4.22

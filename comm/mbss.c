@@ -473,18 +473,6 @@ static int MBSS_VirtualIF_PacketSend(
 	}
 	else
 	{
-		
-#ifdef IKANOS_VX_1X0		
-		IkanosWlanTxCbFuncP *fp = &IKANOS_WlanDataFramesTx;
-
-		skb_p->apFlowData.txDev = dev_p;
-		skb_p->apFlowData.txApId = IKANOS_PERAP_ID;
-		rt->RaCfgObj.IkanosTxInfo.netdev = dev_p;
-		rt->RaCfgObj.IkanosTxInfo.fp = fp;
-		skb_p->apFlowData.txHandle = &(rt->RaCfgObj.IkanosTxInfo);
-		ap2apFlowProcess(skb_p, dev_p);
-#endif		
-		
 		skb_p = Insert_Vlan_Tag(rt, skb_p, dev_id, SOURCE_MBSS);
 		
 		

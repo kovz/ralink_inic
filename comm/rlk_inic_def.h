@@ -24,16 +24,6 @@
 #define INIC_INF_TYPE_MII 1
 #define INIC_INF_TYPE_USB 2
 
-#ifdef IKANOS_VX_1X0
-	typedef void (*IkanosWlanTxCbFuncP)(void *, void *);
-
-	struct IKANOS_TX_INFO
-	{
-		struct net_device *netdev;
-		IkanosWlanTxCbFuncP *fp;
-	};
-#endif // IKANOS_VX_1X0 //
-
 #ifndef SET_MODULE_OWNER
 #define SET_MODULE_OWNER(dev) do {} while(0)
 #endif
@@ -413,13 +403,8 @@ typedef struct __RACFG_OBJECT
 	wait_queue_head_t           waitQH;
 	int                         wait_completed;
 	RTMP_SPIN_LOCK              waitLock;
-	struct semaphore			taskSem; 
-	struct semaphore			backlogSem; 
-	RaCfgQueue					taskQueue;
 	DECLARE_KFIFO(task_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
-	RaCfgQueue					backlogQueue;
 	DECLARE_KFIFO(backlog_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
-	RaCfgQueue                  waitQueue;
 	DECLARE_KFIFO(wait_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
 
 	u8                          packet[1536];
@@ -440,10 +425,6 @@ typedef struct __RACFG_OBJECT
     boolean                     cfg_simulated;
     boolean                     firm_simulated;
 #endif
-#ifdef IKANOS_VX_1X0
-	struct IKANOS_TX_INFO		IkanosTxInfo;
-	struct IKANOS_TX_INFO		IkanosRxInfo[MAX_MBSSID_NUM];
-#endif // IKANOS_VX_1X0 //
     int                         extraProfileOffset;
 #if defined(MULTIPLE_CARD_SUPPORT) || defined(CONFIG_CONCURRENT_INIC_SUPPORT)
 	s8					InterfaceNumber;
@@ -477,7 +458,7 @@ typedef struct __RACFG_OBJECT
 	u8							WowInbandInterval;						// WOW inband timer interval					
 #endif // WOWLAN_SUPPORT //     
     
-} RACFG_OBJECT, PRACFG_OBJECT;
+} RACFG_OBJECT;
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 

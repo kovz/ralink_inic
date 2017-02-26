@@ -47,11 +47,6 @@
 #include <linux/pci.h>
 #include "rlk_inic_reg.h"
 #include "rlk_inic_pci.h"
-
-#ifdef IKANOS_VX_1X0
-#include "vr_ikans.h"
-#endif
-
 #endif
 
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_USB)

@@ -115,9 +115,6 @@ static const struct net_device_ops netdev_ops = {
 	.ndo_open		= rlk_inic_open,
 	.ndo_stop		= rlk_inic_close,
 	.ndo_set_multicast_list = rlk_inic_set_rx_mode,
-#ifdef IKANOS_VX_1X0
-	.ndo_start_xmit   = IKANOS_DataFramesTx,
-#else
 	.ndo_start_xmit    = rlk_inic_send_packet,
 #endif
 	.ndo_get_stats  = rlk_inic_get_stats,
@@ -203,14 +200,7 @@ static inline void rlk_inic_rx_skb (iNIC_PRIVATE *rt, struct sk_buff *skb,
 	{
 
 /* Push up the protocol stack */
-#ifdef IKANOS_VX_1X0
-		skb->data -= 14;
-		skb->len += 14;
-		IKANOS_DataFrameRx(rt, dev_id, skb->dev, skb, skb->len);
-#else
-		//netif_rx(skb);
 		netif_receive_skb(skb);
-#endif
 	}
 }
 
@@ -1136,11 +1126,6 @@ int rlk_inic_open (struct net_device *dev)
 	RaCfgSetUp(rt, dev);
 #endif
 
-
-#ifdef IKANOS_VX_1X0
-	VR_IKANOS_FP_Init(rt, rlk_inic_send_packet); 
-#endif
-
 	return 0;
 #ifndef NM_SUPPORT
 	err_out_hw:
@@ -1330,12 +1315,7 @@ static int rlk_inic_init_one (struct pci_dev *pdev, const struct pci_device_id *
 	dev->open               = rlk_inic_open;
 	dev->stop               = rlk_inic_close;
 	dev->set_multicast_list = rlk_inic_set_rx_mode;
-#ifdef IKANOS_VX_1X0
-	dev->hard_start_xmit    = IKANOS_DataFramesTx;
-#else
 	dev->hard_start_xmit    = rlk_inic_send_packet;
-#endif
-
 	dev->get_stats          = rlk_inic_get_stats;
 	dev->do_ioctl           = rlk_inic_ioctl;
 #else
