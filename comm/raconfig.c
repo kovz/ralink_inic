@@ -518,7 +518,7 @@ static void RaCfgHeartBeatTimeOut(unsigned long arg)
 	}
 #endif
 
-#if 1
+#if 0
 	// 1. Check Threads, be sure not executed after:
 	//    timer deleted == RaCfgReset == ra0 close
 	RTMP_SEM_LOCK(&pAd->RaCfgObj.timerLock);
