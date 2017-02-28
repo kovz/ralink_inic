@@ -83,7 +83,6 @@ static const struct net_device_ops netdev_ops = {
 	.ndo_get_stats  = rlk_inic_get_stats,
 	.ndo_do_ioctl       = rlk_inic_ioctl,
 };
-#endif
 
 MODULE_DEVICE_TABLE(pci, rlk_inic_pci_tbl);
 
