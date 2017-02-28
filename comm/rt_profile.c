@@ -328,9 +328,7 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 	unsigned char           *macptr;                            
 	int                     i=0;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 	struct cred *override_cred, *old_cred;
-#endif	
 
 
 	buffer = kmalloc(MAX_INI_BUFFER_SIZE, MEM_ALLOC_FLAG);
@@ -366,11 +364,6 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 
 	// Save uid and gid used for filesystem access.
 	// Set user and group to 0 (root)	
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	orgfsuid = current->fsuid;
-	orgfsgid = current->fsgid;
-	current->fsuid=current->fsgid = 0;
-#else
 	orgfsuid = current_fsuid();
 	orgfsgid = current_fsgid();
 	override_cred = prepare_creds();
@@ -379,7 +372,6 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 	override_cred->fsuid.val = 0;
 	override_cred->fsgid.val = 0;
 	old_cred = (struct cred *)override_creds(override_cred);
-#endif
 	orgfs = get_fs();
 	set_fs(KERNEL_DS);
 
@@ -533,13 +525,8 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 	}
 
 	set_fs(orgfs);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	current->fsuid = orgfsuid;
-	current->fsgid = orgfsgid;
-#else
 	revert_creds(old_cred);
 	put_cred(override_cred);
-#endif
 	kfree(buffer);
 	kfree(tmpbuf);
 

@@ -172,10 +172,8 @@ static void RaCfgUpload(iNIC_PRIVATE *pAd, FileHandle *fh, int isconfig)
 					NULL);
 
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			pUrb->transfer_dma = data_dma;
 			pUrb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
-#endif
 			if(RTUSB_SUBMIT_URB(pUrb) != 0)
 			{
 				break;
@@ -212,10 +210,8 @@ static void RaCfgUpload(iNIC_PRIVATE *pAd, FileHandle *fh, int isconfig)
 					rt_intr_complete,
 					NULL);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			pUrb->transfer_dma = data_dma;
 			pUrb->transfer_flags |= URB_NO_TRANSFER_DMA_MAP;
-#endif
 
 			if(RTUSB_SUBMIT_URB(pUrb) != 0)
 			{
@@ -389,42 +385,6 @@ BOOLEAN RLK_INICProbePostConfig(
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)_dev_p;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	struct usb_device *xdev = pAd->sbdev.udev;
-	int conf_num;
-
-	BulkOutEpAddr = 0;
-
-	/* There should be only one endpoint (BULK_OUT) in FW upgrade stage (RLK_INIC)*/
-	for ( conf_num = 0; conf_num < xdev->descriptor.bNumConfigurations; conf_num++ ) {
-		struct usb_config_descriptor *conf = NULL;
-		int intf_num;
-
-		conf = &(xdev->config[conf_num]);
-		for ( intf_num = 0; intf_num < conf->bNumInterfaces; intf_num++ ) {
-			struct usb_interface *comm_intf_group = NULL;
-			int altset_num;
-
-			comm_intf_group = &( conf->interface[intf_num] );
-			for ( altset_num = 0; altset_num < comm_intf_group->num_altsetting; altset_num++ ) {
-				struct usb_interface_descriptor *comm_intf = NULL;
-				int ep_num;
-
-				comm_intf = &( comm_intf_group->altsetting[altset_num] );
-				for ( ep_num = 0; ep_num < comm_intf->bNumEndpoints; ep_num++ ) {
-					if(((comm_intf->endpoint[ep_num].bEndpointAddress & USB_ENDPOINT_DIR_MASK) == USB_DIR_OUT) && (comm_intf->endpoint[ep_num].bmAttributes == USB_ENDPOINT_XFER_BULK)){
-						BulkOutEpAddr = comm_intf->endpoint[ep_num].bEndpointAddress;
-						BulkOutMaxPacketSize =comm_intf->endpoint[ep_num].wMaxPacketSize;
-						goto found;
-					}
-				}
-			}
-		}
-	}
-
-	found:
-
-#else
 	struct usb_host_interface *iface_desc;
 	struct usb_interface *intf = pAd->sbdev.intf;
 	UINT32 i,NumberOfPipes;
@@ -442,7 +402,6 @@ BOOLEAN RLK_INICProbePostConfig(
 			break;
 		}
 	}
-#endif
 
 	if (BulkOutEpAddr)
 	{
@@ -514,30 +473,11 @@ int	NICLoadFirmware(iNIC_PRIVATE *pAd)
 void fw_thread_init(PUCHAR pThreadName, PVOID pNotify)
 {
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	daemonize(pThreadName /*"%s",pAd->net_dev->name*/);
 
 	allow_signal(SIGTERM);
 	allow_signal(SIGKILL);
 	current->flags |= PF_NOFREEZE;
-#else
-	unsigned long flags;
-
-	daemonize();
-	reparent_to_init();
-	strcpy(current->comm, pThreadName);
-
-	siginitsetinv(&current->blocked, sigmask(SIGTERM) | sigmask(SIGKILL));
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,4,22)
-	/* Allow interception of SIGKILL only
-	 * Don't allow other signals to interrupt the transmission */
-	spin_lock_irqsave(&current->sigmask_lock, flags);
-	flush_signals(current);
-	recalc_sigpending(current);
-	spin_unlock_irqrestore(&current->sigmask_lock, flags);
-#endif
-#endif
 
 
 #if 0 /* Continue main program when thread complete (f/w upgrade complete) */

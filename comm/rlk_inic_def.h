@@ -28,10 +28,6 @@
 #define SET_MODULE_OWNER(dev) do {} while(0)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-typedef unsigned long uintptr_t;
-#endif
-
 #ifndef INT32
 #define INT32        int
 #endif
@@ -179,52 +175,22 @@ do {									\
         }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
-#define NETDEV_TX_OK     0        /* driver took care of packet */
-#define NETDEV_TX_BUSY   1
-#endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
-#define SK_RECEIVE_QUEUE receive_queue
-#define PCI_SET_CONSISTENT_DMA_MASK pci_set_dma_mask
-#define SK_SOCKET socket
-#else
 #define SK_RECEIVE_QUEUE sk_receive_queue
 #define PCI_SET_CONSISTENT_DMA_MASK pci_set_consistent_dma_mask
 #define SK_SOCKET sk_socket
-#endif
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
-#ifndef IRQ_HANDLED
-#define irqreturn_t void
-#define IRQ_HANDLED
-#define IRQ_NONE
-#endif
-#endif
 
 #ifndef __iomem
 #define __iomem
 #endif
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,21)
-#define DEV_SHORTCUT(ndev)  ((ndev)->class_dev.dev)
-#else
 #define DEV_SHORTCUT(ndev)  ((ndev)->dev.parent)
-#endif
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,23)
-#define DEV_GET_BY_NAME(name) dev_get_by_name(name);
-#else
 #define DEV_GET_BY_NAME(name) dev_get_by_name(&init_net, name);
-#endif
 
 #ifndef SET_NETDEV_DEV
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
-#define SET_NETDEV_DEV(ndev, pdev)  do { } while (0)
-#else
 #define SET_NETDEV_DEV(ndev, pdev)  (DEV_SHORTCUT(ndev) = (pdev)) //do { } while (0)
-#endif
 #endif
 
 #ifndef SEEK_SET
@@ -512,38 +478,6 @@ struct vlan_tic
 #define GET_SKB_HARD_HEADER_LEN(_x)  (_x->cb[0])
 #define SET_SKB_HARD_HEADER_LEN(_x, _y)  (_x->cb[0] = _y)
 
-//#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,4,31)
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
-#define BR_HOOK_NOT_HANDLED 1
-#define BR_HOOK_HANDLED     0
-#define DECLARE_BR_HANDLE_FRAME(func, p, skb, pskb) \
-    static int (*func)(struct sk_buff *skb)
-#define DEFINE_BR_HANDLE_FRAME(func, p, skb, pskb) \
-    static int func(struct sk_buff *skb)
-#define DECLARE_BR_HANDLE_FRAME_SKB(skb, pskb)
-#define BR_HANDLE_FRAME(func, p, skb, pskb) \
-    func(skb)
-#define DEFINE_PACKET_TYPE_FUNC(func, skb, dev, pt, orig_dev) \
-    static int func(struct sk_buff *skb, struct net_device *dev, \
-                    struct packet_type *pt)
-
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,9) && LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
-
-#define BR_HOOK_NOT_HANDLED 0
-#define BR_HOOK_HANDLED     1
-#define DECLARE_BR_HANDLE_FRAME(func, p, skb, pskb) \
-    static int (*func)(struct net_bridge_port *p, struct sk_buff **pskb)
-#define DEFINE_BR_HANDLE_FRAME(func, p, skb, pskb) \
-    static int func(struct net_bridge_port *p, struct sk_buff **pskb)
-#define DECLARE_BR_HANDLE_FRAME_SKB(skb, pskb) \
-    struct sk_buff *skb = *pskb
-#define BR_HANDLE_FRAME(func, p, skb, pskb) \
-    func(p, pskb)
-#define DEFINE_PACKET_TYPE_FUNC(func, skb, dev, pt, orig_dev) \
-    static int func(struct sk_buff *skb, struct net_device *dev, \
-                    struct packet_type *pt, struct net_device *orig_dev)
-#else
-
 #define BR_HOOK_NOT_HANDLED skb
 #define BR_HOOK_HANDLED     NULL
 #define DECLARE_BR_HANDLE_FRAME(func, p, skb, pskb) \
@@ -556,27 +490,13 @@ struct vlan_tic
 #define DEFINE_PACKET_TYPE_FUNC(func, skb, dev, pt, orig_dev) \
     static int func(struct sk_buff *skb, struct net_device *dev, \
                     struct packet_type *pt, struct net_device *orig_dev)
-#endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,27)
 typedef struct pid * THREAD_PID;
 #define THREAD_PID_INIT_VALUE NULL
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,30)
 #define	GET_PID(_v)	find_get_pid(_v)
-#else
-#define GET_PID(_v) task_pid(find_task_by_vpid((_v)))
-#endif
 #define GET_PID_NUMBER(_v) pid_nr((_v))
 #define CHECK_PID_LEGALITY(_pid) if (pid_nr((_pid)) >= 0)
 #define KILL_THREAD_PID(_A, _B, _C) kill_pid((_A), (_B), (_C))
-#else
-typedef pid_t THREAD_PID;
-#define THREAD_PID_INIT_VALUE -1
-#define GET_PID(_v) (_v)
-#define GET_PID_NUMBER(_v) (_v)
-#define CHECK_PID_LEGALITY(_pid) if ((_pid) >= 0)
-#define KILL_THREAD_PID(_A, _B, _C) kill_proc((_A), (_B), (_C))
-#endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 extern CONCURRENT_OBJECT ConcurrentObj;

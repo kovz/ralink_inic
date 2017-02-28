@@ -28,10 +28,8 @@
 #include <linux/interrupt.h>
 #include <linux/notifier.h>
 #include <net/iw_handler.h>
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 #include <linux/cred.h>
 #include <linux/if_bridge.h>
-#endif
 #include <asm/types.h>
 #include <asm/io.h>
 #include <asm/irq.h>
@@ -41,9 +39,7 @@
 #include "rlk_inic_def.h"
 
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_PCI)
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
 #include <linux/irqreturn.h>
-#endif
 #include <linux/pci.h>
 #include "rlk_inic_reg.h"
 #include "rlk_inic_pci.h"
@@ -53,9 +49,7 @@
 #include <linux/ethtool.h>
 #include <linux/usb.h>
 #include "../usb/rt_usb_dev.h"
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 #include <linux/workqueue.h>
-#endif
 #endif
 
 #include "raconfig.h"

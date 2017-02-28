@@ -39,24 +39,6 @@ static int reset_gpio = -1;	// Reset GPIO struct
 	char *root = "";
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0)
-#ifdef DBG
-MODULE_PARM (root, "s");
-#endif
-MODULE_PARM (debug, "i");
-MODULE_PARM (bridge, "i");
-MODULE_PARM (csumoff, "i");
-MODULE_PARM (mode, "s");
-MODULE_PARM (mac, "s");
-
-#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-MODULE_PARM (mac2, "s");
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-
-MODULE_PARM (max_fw_upload, "i");
-MODULE_PARM (miimaster, "s");
-MODULE_PARM (syncmiimac, "i");
-#else
 #ifdef DBG
 module_param (root, charp, 0);
 MODULE_PARM_DESC(root, DRV_NAME ": firmware and profile path offset");
@@ -76,7 +58,6 @@ module_param(miimaster, charp, 0);
 module_param(syncmiimac, int, 1);
 module_param(reset_gpio, int, 0);
 
-#endif
 MODULE_PARM_DESC(debug, DRV_NAME ": bitmapped message enable number");
 MODULE_PARM_DESC(mode, DRV_NAME ": iNIC operation mode: AP(default) or STA");
 MODULE_PARM_DESC(mac, DRV_NAME ": iNIC mac addr");
@@ -113,9 +94,7 @@ extern int SendFragmentPackets(iNIC_PRIVATE *pAd, unsigned short cmd_type,
 
 iNIC_PRIVATE *gAdapter[2];
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 	static struct net_device_ops Netdev_Ops[2];
-#endif
 
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
 DECLARE_BR_HANDLE_FRAME(org_br_handle_frame, p, skb, pskb);
@@ -360,11 +339,7 @@ int rlk_inic_mii_xmit(struct sk_buff *skb, struct net_device *dev) {
 	}
 	skb->dev = pAd->master;
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
-	skb->nh.raw = skb->data; // keep away from buggy warning in /net/core/dev.c
-#else
 	skb_reset_network_header(skb); // keep away from buggy warning in /net/core/dev.c
-#endif
 
 #if 0
 	if (skb->data[12] != 0xff || skb->data[13] != 0xff)
@@ -506,20 +481,12 @@ static int __init rlk_inic_init(void) {
 	pAd->master = master;
 
 	spin_lock_init(&pAd->lock);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	dev->open = mii_open;
-	dev->stop = mii_close;
-	dev->hard_start_xmit = mii_send_packet;
-	dev->do_ioctl = rlk_inic_ioctl;
-	dev->get_stats = mii_get_stats;
-#else
 	Netdev_Ops[0].ndo_open = mii_open;
 	Netdev_Ops[0].ndo_stop = mii_close;
 	Netdev_Ops[0].ndo_start_xmit = mii_send_packet;
 	Netdev_Ops[0].ndo_do_ioctl = rlk_inic_ioctl;
 	Netdev_Ops[0].ndo_get_stats = mii_get_stats;
 	dev->netdev_ops = (const struct net_device_ops *) &Netdev_Ops[0];
-#endif
 	//dev->weight             = 64;	/* arbitrary? from NAPI_HOWTO.txt. */
 
 	for (i = 0; i < 32; i++) {
@@ -606,18 +573,11 @@ static int __init rlk_inic_init(void) {
 	pAd2->dev = dev2;
 	pAd2->master = master;
 	spin_lock_init(&pAd2->lock);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	dev2->open = mii_open;
-	dev2->stop = mii_close;
-	dev2->hard_start_xmit = mii_send_packet;
-	dev2->do_ioctl = rlk_inic_ioctl;
-#else
 	Netdev_Ops[1].ndo_open = mii_open;
 	Netdev_Ops[1].ndo_stop = mii_close;
 	Netdev_Ops[1].ndo_start_xmit = mii_send_packet;
 	Netdev_Ops[1].ndo_do_ioctl = rlk_inic_ioctl;
 	dev2->netdev_ops = (const struct net_device_ops *) &Netdev_Ops[1];
-#endif	
 	for (i = 0; i < 32; i++) {
 		snprintf(name, sizeof(name), "%s01_%d", INIC_INFNAME, i);
 

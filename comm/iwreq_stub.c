@@ -56,11 +56,7 @@ IWREQdecode(struct iwreq *wrq, unsigned char *buf, IW_TYPE type, char *kernel_da
 		p += 2;
 		wrq->u.freq.i = *p;
 		p++;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 		wrq->u.freq.flags = *p; 
-#else
-		wrq->u.freq.pad   = *p; 
-#endif
 		p += 1;
 		break;
 	case IW_MODE_TYPE:
@@ -149,12 +145,7 @@ IWREQencode(unsigned char *buf, struct iwreq *wrq, IW_TYPE type, char *kernel_da
 		p += 2;
 		*p = wrq->u.freq.i;
 		p++;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10)
 		*p = wrq->u.freq.flags; 
-#else
-		*p = wrq->u.freq.pad; 
-		p += 1;
-#endif
 		break;
 	case IW_MODE_TYPE:
 		*(u32 *)p = wrq->u.mode;

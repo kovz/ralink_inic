@@ -65,12 +65,7 @@ int RTMPIoctlHandler(
                         struct iw_range *range = (struct iw_range *)kernel_data;
                         range->we_version_compiled = 19;
                         range->we_version_source   = 19;
-
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,24)
-
                         range->scan_capa = IW_SCAN_CAPA_ESSID | IW_SCAN_CAPA_CHANNEL;
-
-#endif // KERNEL_VERSION  //
                     }
                     break;
                 case SIOCSIWSCAN:
@@ -195,9 +190,7 @@ int Set_ATE_Load_E2P_Wrapper(
 	u8              WriteEEPROM[EEPROM_SIZE];
 	UINT32          FileLength = 0;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 	struct cred *override_cred, *old_cred;
-#endif
 
 	DBGPRINT("===> %s\n", __FUNCTION__);
 
@@ -209,12 +202,6 @@ int Set_ATE_Load_E2P_Wrapper(
 	/* save uid and gid used for filesystem access.
 	** set user and group to 0 (root)
 	*/
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	orgfsuid = current->fsuid;
-	orgfsgid = current->fsgid;
-	/* as root */
-	current->fsuid = current->fsgid = 0;
-#else
 	orgfsuid = current_fsuid();
 	orgfsgid = current_fsgid();
 	override_cred = prepare_creds();
@@ -223,7 +210,6 @@ int Set_ATE_Load_E2P_Wrapper(
 	override_cred->fsuid = GLOBAL_ROOT_UID;
 	override_cred->fsgid = GLOBAL_ROOT_GID;
 	old_cred = (struct cred *)override_creds(override_cred);
-#endif
 
 	orgfs = get_fs();
 	set_fs(KERNEL_DS);
@@ -287,13 +273,8 @@ int Set_ATE_Load_E2P_Wrapper(
 
 	/* restore */
 	set_fs(orgfs);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	current->fsuid = orgfsuid;
-	current->fsgid = orgfsgid;      
-#else
 	revert_creds(old_cred);
 	put_cred(override_cred);
-#endif
 	DBGPRINT("<=== %s (ret=%d)\n", __FUNCTION__, ret);
 
 	return ret;

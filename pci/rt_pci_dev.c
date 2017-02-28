@@ -3,20 +3,6 @@
 #include "net/sch_generic.h"
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20)
-inline void netif_rx_complete(struct net_device *dev)
-{
-	unsigned long flags;
-
-	local_irq_save(flags);
-	BUG_ON(!test_bit(__LINK_STATE_RX_SCHED, &dev->state));
-	list_del(&dev->poll_list);
-	smp_mb__before_clear_bit();
-	clear_bit(__LINK_STATE_RX_SCHED, &dev->state);
-	local_irq_restore(flags);
-}
-#endif
-
 #ifndef HAVE_FREE_NETDEV
 inline void free_netdev(struct net_device *dev)
 {
@@ -31,19 +17,9 @@ inline void *netdev_priv(struct net_device *dev)
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,29)
-#define NETIF_RX_COMPLETE(dev, napi) 	netif_rx_complete(dev, napi)
-#define NETIF_RX_SCHEDULE_PREP(dev, napi) 	netif_rx_schedule_prep(dev, napi)
-#define __NETIF_RX_SCHEDULE(dev, napi)		__netif_rx_schedule(dev, napi)
-#elif LINUX_VERSION_CODE == KERNEL_VERSION(2,6,29)
-#define NETIF_RX_COMPLETE(dev, napi)	netif_rx_complete(napi);
-#define NETIF_RX_SCHEDULE_PREP(dev, napi)	netif_rx_schedule_prep(napi)
-#define __NETIF_RX_SCHEDULE(dev, napi)		__netif_rx_schedule(napi)
-#else
 #define NETIF_RX_COMPLETE(dev, napi) 	napi_complete(napi)
 #define NETIF_RX_SCHEDULE_PREP(dev, napi) 	napi_schedule_prep(napi)
 #define __NETIF_RX_SCHEDULE(dev, napi)		__napi_schedule(napi)
-#endif
 
 /* These identify the driver base version and may not be removed. */
 static char version[] =
@@ -64,17 +40,6 @@ int max_fw_upload = 5; /* Max Firmware upload attempt */
 char *root = "";
 #endif
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,12)
-#ifdef DBG
-MODULE_PARM (root, "s");
-#endif
-MODULE_PARM (debug, "i");
-MODULE_PARM (bridge, "i");
-MODULE_PARM (csumoff, "i");
-MODULE_PARM (max_fw_upload, "i");
-MODULE_PARM (mode, "s");
-MODULE_PARM (mac, "s");
-#else
 #ifdef DBG
 module_param (root, charp, 0);
 MODULE_PARM_DESC (root,  DRV_NAME ": firmware and profile path offset");
@@ -85,7 +50,7 @@ module_param (csumoff, int, 0);
 module_param (max_fw_upload, int, 5);
 module_param (mode, charp, 0);
 module_param (mac, charp, 0);
-#endif
+
 MODULE_PARM_DESC (debug, DRV_NAME ": bitmapped message enable number");
 MODULE_PARM_DESC (mode, DRV_NAME ": iNIC operation mode: AP(default) or STA");
 MODULE_PARM_DESC (mac, DRV_NAME ": iNIC mac addr");
@@ -110,13 +75,11 @@ static struct pci_device_id rlk_inic_pci_tbl[] = {
 	{0,}		/* terminate list */
 };
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 static const struct net_device_ops netdev_ops = {
 	.ndo_open		= rlk_inic_open,
 	.ndo_stop		= rlk_inic_close,
 	.ndo_set_multicast_list = rlk_inic_set_rx_mode,
 	.ndo_start_xmit    = rlk_inic_send_packet,
-#endif
 	.ndo_get_stats  = rlk_inic_get_stats,
 	.ndo_do_ioctl       = rlk_inic_ioctl,
 };
@@ -212,12 +175,6 @@ static inline unsigned int rlk_inic_rx_csum_ok (u32 status)
 		return 0;
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-static int rlk_inic_rx_poll (struct net_device *dev, int *budget)
-{
-	iNIC_PRIVATE *rt = netdev_priv(dev);
-	unsigned rx_work = min(dev->quota, *budget);
-#else
 static int rlk_inic_rx_poll (struct napi_struct *napi, int budget)
 {
 	unsigned rx_work = budget;
@@ -227,8 +184,6 @@ static int rlk_inic_rx_poll (struct napi_struct *napi, int budget)
 
 	iNIC_PRIVATE *rt = container_of(napi, iNIC_PRIVATE, napi);
 	struct net_device *dev = rt->dev;
-
-#endif
 
 	unsigned rx;
 	int entry;
@@ -345,11 +300,6 @@ rx_next:
 			break;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-	dev->quota -= rx;
-	*budget -= rx;
-#endif
-
 	/* 
 	 * if we did not reach work limit, then we're done with
 	 * this round of polling
@@ -364,34 +314,17 @@ rx_next:
 
 		//local_irq_disable();
 		local_irq_save(flags);
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-		netif_rx_complete(dev);
-#else
 		NETIF_RX_COMPLETE(dev, napi);
-#endif
 		rlk_inic_int_enable(rt, FE_RX_DONE_INT0);             
 		local_irq_restore(flags);
 
 		//local_irq_enable();
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-		return 0;	/* done */
-	}
-
-	return 1;		/* not done */
-#else
 	}
 	return rx;
-#endif
-
 }
 
 static irqreturn_t
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,20)
-rlk_inic_interrupt (int irq, void *dev_instance, struct pt_regs *regs)
-#else
 rlk_inic_interrupt (int irq, void *dev_instance)
-#endif
 {
 	struct net_device *dev = dev_instance;
 	iNIC_PRIVATE *rt;
@@ -431,13 +364,6 @@ rlk_inic_interrupt (int irq, void *dev_instance)
 	if (status & FE_RX_DONE_INT0)
 	{
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-		if (netif_rx_schedule_prep(dev))
-		{
-			rlk_inic_int_disable(rt, FE_RX_DONE_INT0);
-			__netif_rx_schedule(dev);
-		}
-#else
 		if (NETIF_RX_SCHEDULE_PREP(dev,  &rt->napi))
 		{
 			rlk_inic_int_disable(rt, FE_RX_DONE_INT0);
@@ -449,7 +375,6 @@ rlk_inic_interrupt (int irq, void *dev_instance)
 			rlk_inic_int_enable(rt, rt->int_enable_reg);
 		}
 		*/
-#endif
 	}
 
 	if (status & FE_TX_DONE_INT0)
@@ -1118,9 +1043,7 @@ int rlk_inic_open (struct net_device *dev)
 		goto err_out_hw;
 	netif_carrier_on(dev);
 	netif_start_queue(dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 	napi_enable(&rt->napi);
-#endif
 	rlk_inic_int_enable(rt, rt->int_enable_reg);
 
 	RaCfgSetUp(rt, dev);
@@ -1148,9 +1071,7 @@ int rlk_inic_close (struct net_device *dev)
 
 #ifndef NM_SUPPORT
 	spin_lock_irqsave(&rt->lock, flags);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 	napi_disable(&rt->napi);
-#endif
 
 	if (netif_msg_ifdown(rt))
 		DBGPRINT("%s: disabling interface\n", dev->name);
@@ -1180,9 +1101,6 @@ static int rlk_inic_init_one (struct pci_dev *pdev, const struct pci_device_id *
 	iNIC_PRIVATE *rt;
 	int rc;
 	void __iomem *regs;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	long pciaddr;
-#endif
 	unsigned int pci_using_dac;
 	u8 pci_rev;
 	char *print_name;
@@ -1193,12 +1111,7 @@ static int rlk_inic_init_one (struct pci_dev *pdev, const struct pci_device_id *
 		printk("%s", version);
 #endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	print_name = pdev ? (char *)pci_name(pdev) : DRV_NAME;
-#else
-	print_name = pdev ? (char *)pdev->slot_name : DRV_NAME;
-#endif
-
 	pci_read_config_byte(pdev, PCI_REVISION_ID, &pci_rev);
 
 	printk(KERN_INFO PFX "pci dev %s (id %04x:%04x rev %02x)\n",
@@ -1242,23 +1155,6 @@ static int rlk_inic_init_one (struct pci_dev *pdev, const struct pci_device_id *
 	if (rc)
 		goto err_out_mwi;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	pciaddr = pci_resource_start(pdev, 1);
-	if (!pciaddr)
-	{
-		rc = -EIO;
-		printk(KERN_ERR PFX "no MMIO resource for pci dev %s\n",
-			   print_name);
-		goto err_out_res;
-	}
-	if (pci_resource_len(pdev, 1) < RLK_INIC_REGS_SIZE)
-	{
-		rc = -EIO;
-		printk(KERN_ERR PFX "MMIO resource (%lx) too small on pci dev %s\n",
-			   (unsigned long) pci_resource_len(pdev, 1), print_name);
-		goto err_out_res;
-	}
-#endif
 	/* Configure DMA attributes. */
 	if ((sizeof(dma_addr_t) > 4) &&
 		!PCI_SET_CONSISTENT_DMA_MASK(pdev, 0xffffffffffffffffULL) &&
@@ -1285,7 +1181,6 @@ static int rlk_inic_init_one (struct pci_dev *pdev, const struct pci_device_id *
 			goto err_out_res;
 		}
 	}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	regs = pci_iomap(pdev, 1, RLK_INIC_REGS_SIZE);
 	if (!regs)
 	{
@@ -1295,40 +1190,16 @@ static int rlk_inic_init_one (struct pci_dev *pdev, const struct pci_device_id *
 		goto err_out_res;
 	}
 
-#else
-	regs = ioremap(pciaddr, RLK_INIC_REGS_SIZE);
-	if (!regs)
-	{
-		rc = -EIO;
-		printk(KERN_ERR PFX "Cannot map PCI MMIO (%lx@%lx) on pci dev %s\n",
-			   (unsigned long)pci_resource_len(pdev, 1), pciaddr, print_name);
-		goto err_out_res;
-	}
-#endif
 	dev->base_addr = (unsigned long) regs;
 	rt->regs = regs;
 	printk("rt->regs = %p\n", regs);
 
 	rlk_inic_stop_hw(rt);
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	dev->open               = rlk_inic_open;
-	dev->stop               = rlk_inic_close;
-	dev->set_multicast_list = rlk_inic_set_rx_mode;
-	dev->hard_start_xmit    = rlk_inic_send_packet;
-	dev->get_stats          = rlk_inic_get_stats;
-	dev->do_ioctl           = rlk_inic_ioctl;
-#else
 	dev->netdev_ops = &netdev_ops;
-#endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-	dev->poll               = rlk_inic_rx_poll;
-	dev->weight             = 64;	/* arbitrary? from NAPI_HOWTO.txt. */
-#else
 	memset(&rt->napi, 0, sizeof(struct napi_struct));
 	netif_napi_add(dev, &rt->napi, rlk_inic_rx_poll, 64);
-#endif
 
 #if 0
 	dev->tx_timeout = rlk_inic_tx_timeout;
@@ -1421,9 +1292,7 @@ static int rlk_inic_init_one (struct pci_dev *pdev, const struct pci_device_id *
 		goto err_out_hw;
 	netif_carrier_on(dev);
 	netif_start_queue(dev);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 	napi_enable(&rt->napi);
-#endif
 	rlk_inic_int_enable(rt, rt->int_enable_reg);
 	rtnl_unlock();
 	dev_change_flags(dev, dev->flags | IFF_UP);
@@ -1490,7 +1359,7 @@ static void rlk_inic_remove_one (struct pci_dev *pdev)
 #if IW_HANDLER_VERSION < 7
 		dev->get_wireless_stats = NULL;
 #endif
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21) || defined(CONFIG_WIRELESS_EXT)
+#if defined(CONFIG_WIRELESS_EXT)
 		dev->wireless_handlers = NULL;
 #endif
 	}
@@ -1518,11 +1387,7 @@ static int __init rlk_inic_init (void)
 	printk("%s", version);
 #endif
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21)
-	return pci_module_init (&rlk_inic_driver);
-#else
 	return pci_register_driver(&rlk_inic_driver);
-#endif
 }
 
 static void __exit rlk_inic_exit (void)

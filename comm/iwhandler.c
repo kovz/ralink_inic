@@ -649,20 +649,16 @@ int rt_ioctl_giwpoint_wrapper(struct net_device *dev,
 		return -ENETDOWN;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
 	if (cmd == SIOCGIWRANGE)
 	{
         // struct iw_range has been re-defined, fields shifted.
 	    struct iw_range *range = (struct iw_range *)extra;
 	    range->we_version_compiled = 19;
 	    range->we_version_source   = 19;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,24)	    
 	    range->scan_capa = IW_SCAN_CAPA_ESSID | IW_SCAN_CAPA_CHANNEL;
-#endif	    
 	    range->enc_capa = IW_ENC_CAPA_CIPHER_TKIP | IW_ENC_CAPA_CIPHER_CCMP | IW_ENC_CAPA_WPA | IW_ENC_CAPA_WPA2;
 	    return 0;
 	}
-#endif // KERNEL_VERSION //
 
     if (!is_fw_running(rt))
         {

@@ -310,20 +310,11 @@ typedef enum _SOURCE_TYPE {
 #endif // MESH_SUPPORT //
 } SOURCE_TYPE;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,1)
-#define KERNEL_THREAD_BEGIN(name)      \
-{                                      \
-    daemonize();                       \
-    reparent_to_init();                \
+#define KERNEL_THREAD_BEGIN(name)	\
+{									\
+    kthread_run(name);				\
+    allow_signal(SIGKILL);          \
 }
-#else
-#define KERNEL_THREAD_BEGIN(name)      \
-{                                      \
-    kthread_run(name);					\
-    allow_signal(SIGKILL);             \
-}
-#endif
-
 
 // for STA Supplicant
 #define RT_OID_WE_VERSION_COMPILED                  0x0622

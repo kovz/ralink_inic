@@ -33,10 +33,6 @@
 
 
 /* USB Networking Link Interface */
-#if  LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-#define 	RX_QLEN(dev)		1
-#define 	TX_QLEN(dev)		1
-#else
 
 #if defined(RLK_INIC_SOFTWARE_AGGREATION) || defined(RLK_INIC_TX_AGGREATION_ONLY)
 #define 	RX_QLEN(dev)		1
@@ -47,8 +43,6 @@
 			(RX_MAX_QUEUE_MEMORY/(dev)->rx_urb_size) : 4)
 #define	TX_QLEN(dev) (((dev)->udev->speed == USB_SPEED_HIGH) ? \
 			(RX_MAX_QUEUE_MEMORY/(dev)->hard_mtu) : 4)
-#endif
-
 #endif
 
 /* throttle rx/tx briefly after some faults, so khubd might disconnect() us (it polls at HZ/4 usually) before we report too many false errors.*/
@@ -108,7 +102,6 @@ typedef unsigned char		BOOLEAN;
 
 #define RTUSB_FREE_URB(pUrb)	usb_free_urb(pUrb)
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 #define RTUSB_ALLOC_URB(iso)                                               usb_alloc_urb(iso, GFP_ATOMIC)
 #define RTUSB_SUBMIT_URB(pUrb)                                             usb_submit_urb(pUrb, GFP_ATOMIC)
 #define	RTUSB_URB_ALLOC_BUFFER(pUsb_Dev, BufSize, pDma_addr)               usb_buffer_alloc(pUsb_Dev, BufSize, GFP_ATOMIC, pDma_addr)
@@ -118,15 +111,6 @@ static inline struct usb_driver *driver_of(struct usb_interface *intf)
 {
 	return to_usb_driver(intf->dev.driver);
 }
-#else
-#define usb_get_dev		usb_inc_dev_use
-#define usb_put_dev		usb_dec_dev_use
-#define	flush_scheduled_work	flush_scheduled_tasks
-#define RTUSB_ALLOC_URB(iso)                                               usb_alloc_urb(iso)
-#define RTUSB_SUBMIT_URB(pUrb)                                             usb_submit_urb(pUrb)
-#define RTUSB_URB_ALLOC_BUFFER(pUsb_Dev, BufSize, pDma_addr)               kmalloc(BufSize, GFP_ATOMIC)
-#define	RTUSB_URB_FREE_BUFFER(pUsb_Dev, BufSize, pTransferBuf, Dma_addr)   kfree(pTransferBuf)
-#endif
 
 #define USB_DEVICE_AND_INT_INFO(vend,prod,cl,sc,pr) \
 	match_flags: USB_DEVICE_ID_MATCH_INT_INFO|USB_DEVICE_ID_MATCH_DEVICE, idVendor: (vend), idProduct: (prod), bInterfaceClass: (cl), bInterfaceSubClass: (sc), bInterfaceProtocol: (pr)

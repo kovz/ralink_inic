@@ -294,9 +294,7 @@ typedef struct inic_private
 
 	RACFG_OBJECT				RaCfgObj;
 	struct iw_statistics iw_stats;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,24)
     struct napi_struct   napi;
-#endif
 } iNIC_PRIVATE;
 
 void rlk_inic_init_hw (iNIC_PRIVATE *rt);

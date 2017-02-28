@@ -17,9 +17,7 @@ static int MBSS_VirtualIF_PacketSend(struct sk_buff *skb_p, struct net_device *d
 
 struct net_device_stats *VirtualIF_get_stats(struct net_device *dev);
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 static struct net_device_ops Netdev_Ops[MAX_MBSSID_NUM];
-#endif
 
 void rlk_inic_mbss_init (
 					  struct net_device *main_dev_p, 
@@ -55,11 +53,7 @@ void rlk_inic_mbss_init (
 	for (bss_index=FIRST_MBSSID; bss_index<max_bss_num; bss_index++)
 	{
 		/* allocate a new network device */
-#if LINUX_VERSION_CODE <= 0x20402 // Red Hat 7.1
-		new_dev_p = alloc_netdev(sizeof(VIRTUAL_ADAPTER), "eth%d", ether_setup);
-#else
 		new_dev_p = alloc_etherdev(sizeof(VIRTUAL_ADAPTER));
-#endif // LINUX_VERSION_CODE //
 		if (new_dev_p == NULL)
 		{
 			/* allocation fail, exit */
@@ -79,20 +73,9 @@ void rlk_inic_mbss_init (
 #endif
 				snprintf(slot_name, sizeof(slot_name),"%s%d", INIC_INFNAME, index);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			cur_dev_p = DEV_GET_BY_NAME(slot_name);
-#else
-			for (cur_dev_p=dev_base; cur_dev_p!=NULL; cur_dev_p=cur_dev_p->next)
-			{
-				if (strncmp(cur_dev_p->name, slot_name, 6) == 0)
-					break;
-				/* End of if */
-			} /* End of for */
-#endif // LINUX_VERSION_CODE //
-
 			if (cur_dev_p == NULL)
 				break; /* fine, the RA name is not used */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			else
 			{
 				/* every time dev_get_by_name is called, and it has returned a
@@ -101,7 +84,6 @@ void rlk_inic_mbss_init (
 				   device is unregistered (since dev->refcnt > 1). */
 				dev_put(cur_dev_p);
 			} /* End of if */
-#endif // LINUX_VERSION_CODE //
 		} /* End of for */
 
 		/* assign interface name to the new network interface */
@@ -159,22 +141,12 @@ void rlk_inic_mbss_init (
 				ad_p->RaCfgObj.MBSSID[bss_index].Bssid, MAC_ADDR_LEN);
 
 		/* init operation functions */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-		new_dev_p->open             = MBSS_VirtualIF_Open;
-		new_dev_p->stop             = MBSS_VirtualIF_Close;
-		new_dev_p->hard_start_xmit  = MBSS_VirtualIF_PacketSend;
-		new_dev_p->do_ioctl         = MBSS_VirtualIF_Ioctl;
-		new_dev_p->get_stats        = VirtualIF_get_stats;
-		/* if you dont implement get_stats, dont assign your function with empty
-		   body; or kernel will panic */
-#else
 		Netdev_Ops[bss_index].ndo_open		= MBSS_VirtualIF_Open;
 		Netdev_Ops[bss_index].ndo_stop		= MBSS_VirtualIF_Close;
 		Netdev_Ops[bss_index].ndo_start_xmit		= MBSS_VirtualIF_PacketSend;
 		Netdev_Ops[bss_index].ndo_do_ioctl       = MBSS_VirtualIF_Ioctl;
 		Netdev_Ops[bss_index].ndo_get_stats      = VirtualIF_get_stats;
 		new_dev_p->netdev_ops = (const struct net_device_ops *)&Netdev_Ops[bss_index];	
-#endif		
 		new_dev_p->priv_flags       = INT_MBSSID; /* we are virtual interface */
 
 		/* register this device to OS */
@@ -265,11 +237,7 @@ void rlk_inic_mbss_remove(iNIC_PRIVATE *ad_p)
 			ad_p->RaCfgObj.mbss_close_all = 1;
 			unregister_netdev(dev);
 			ad_p->RaCfgObj.mbss_close_all = 0;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			free_netdev(dev);
-#else
-			kfree(dev);
-#endif // LINUX_VERSION_CODE //
 			ad_p->RaCfgObj.MBSSID[bss_index].MSSIDDev = NULL;
 		} /* End of if */
 	} /* End of for */

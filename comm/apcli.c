@@ -19,7 +19,6 @@ static int APCLI_VirtualIF_PacketSend(struct sk_buff    *skb_p, struct net_devic
 
 extern struct net_device_stats *VirtualIF_get_stats(struct net_device *dev);
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 static const struct net_device_ops netdev_ops = {
 	.ndo_open		= APCLI_VirtualIF_Open,
 	.ndo_stop		= APCLI_VirtualIF_Close,
@@ -27,7 +26,6 @@ static const struct net_device_ops netdev_ops = {
 	.ndo_do_ioctl       = APCLI_VirtualIF_Ioctl,
 	.ndo_get_stats      = VirtualIF_get_stats,
 };
-#endif
 
 void rlk_inic_apcli_init (
 					   struct net_device *main_dev_p, 
@@ -59,11 +57,7 @@ void rlk_inic_apcli_init (
 	for (apcli_index=FIRST_APCLIID; apcli_index < MAX_APCLI_NUM; apcli_index++)
 	{
 		/* allocate a new network device */
-#if LINUX_VERSION_CODE <= 0x20402 // Red Hat 7.1
-		new_dev_p = alloc_netdev(sizeof(VIRTUAL_ADAPTER), "eth%d", ether_setup);
-#else
 		new_dev_p = alloc_etherdev(sizeof(VIRTUAL_ADAPTER));
-#endif // LINUX_VERSION_CODE //
 		if (new_dev_p == NULL)
 		{
 			/* allocation fail, exit */
@@ -83,20 +77,9 @@ void rlk_inic_apcli_init (
 				snprintf(slot_name, sizeof(slot_name), "apcli%d", index);
 
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			cur_dev_p = DEV_GET_BY_NAME(slot_name);
-#else
-			for (cur_dev_p=dev_base; cur_dev_p!=NULL; cur_dev_p=cur_dev_p->next)
-			{
-				if (strncmp(cur_dev_p->name, slot_name, 6) == 0)
-					break;
-				/* End of if */
-			} /* End of for */
-#endif // LINUX_VERSION_CODE //
-
 			if (cur_dev_p == NULL)
 				break; /* fine, the RA name is not used */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			else
 			{
 				/* every time dev_get_by_name is called, and it has returned a
@@ -105,7 +88,6 @@ void rlk_inic_apcli_init (
 				   device is unregistered (since dev->refcnt > 1). */
 				dev_put(cur_dev_p);
 			} /* End of if */
-#endif // LINUX_VERSION_CODE //
 		} /* End of for */
 
 		/* assign interface name to the new network interface */
@@ -169,17 +151,7 @@ void rlk_inic_apcli_init (
 				ad_p->RaCfgObj.APCLI[apcli_index].Bssid, MAC_ADDR_LEN);
 
 		/* init operation functions */
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-		new_dev_p->open             = APCLI_VirtualIF_Open;
-		new_dev_p->stop             = APCLI_VirtualIF_Close;
-		new_dev_p->hard_start_xmit  = APCLI_VirtualIF_PacketSend;
-		new_dev_p->do_ioctl         = APCLI_VirtualIF_Ioctl;
-		new_dev_p->get_stats        = VirtualIF_get_stats;
-		/* if you dont implement get_stats, dont assign your function with empty
-		   body; or kernel will panic */
-#else
 		new_dev_p->netdev_ops = &netdev_ops;
-#endif
 		new_dev_p->priv_flags       = INT_APCLI; /* we are virtual interface */
 
 		/* register this device to OS */
@@ -250,11 +222,7 @@ void rlk_inic_apcli_remove(iNIC_PRIVATE *ad_p)
 			ad_p->RaCfgObj.apcli_close_all = 1;
 			unregister_netdev(dev);
 			ad_p->RaCfgObj.apcli_close_all = 0;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 			free_netdev(dev);
-#else
-			kfree(dev);
-#endif // LINUX_VERSION_CODE //
 			ad_p->RaCfgObj.APCLI[apcli_index].MSSIDDev = NULL;
 		} /* End of if */
 	} /* End of for */

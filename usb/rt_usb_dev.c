@@ -24,16 +24,6 @@ static int bridge = 1;  // enable built-in bridge
 static int csumoff = 0; // Enable Checksum Offload over IPv4(TCP, UDP)
 int max_fw_upload = 5;  // Max Firmware upload attempt
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,12)
-#ifdef DBG
-MODULE_PARM (root, "s");
-#endif
-MODULE_PARM (debug, "i");
-MODULE_PARM (bridge, "i");
-MODULE_PARM (csumoff, "i");
-MODULE_PARM (mode, "s");
-MODULE_PARM (mac, "s");
-#else
 #ifdef DBG
 module_param (root, charp, 0);
 MODULE_PARM_DESC (root, DRV_NAME ": firmware and profile path offset");
@@ -43,7 +33,7 @@ module_param (bridge, int, 1);
 module_param (csumoff, int, 0);
 module_param (mode, charp, 0);
 module_param (mac, charp, 0);
-#endif
+
 MODULE_PARM_DESC (debug, DRV_NAME ": bitmapped message enable number");
 MODULE_PARM_DESC (mode, DRV_NAME ": iNIC operation mode: AP(default) or STA");
 MODULE_PARM_DESC (mac, DRV_NAME ": iNIC mac addr");
@@ -63,60 +53,16 @@ static int usbnet_open (struct net_device *net);
 static int usbnet_stop (struct net_device *net);
 static int usbnet_start_xmit(struct sk_buff *skb, struct net_device *net);
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 static const struct net_device_ops netdev_ops = {
 	.ndo_open		= usbnet_open,
 	.ndo_stop		= usbnet_stop,
 	.ndo_start_xmit    = usbnet_start_xmit,
 	.ndo_do_ioctl       = rlk_inic_ioctl,
 };
-#endif
 
 /*-------------------------------------------------------------------------*/
 //	rt_get_endpoints:  		get IN and OUT Endpoint Address
 /*-------------------------------------------------------------------------*/
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-int rt_get_endpoints(struct usbnet *dev, struct usb_interface *intf)
-{
-	struct usb_interface_descriptor *alt;
-	struct usb_endpoint_descriptor	*in=NULL, *out=NULL;
-	int				tmp;
-
-	for (tmp = 0; tmp < intf->max_altsetting; tmp++) {
-		unsigned	ep;
-		alt = intf->altsetting + tmp;
-		for (ep = 0; ep < alt->bNumEndpoints; ep++) {
-			struct usb_endpoint_descriptor	*e;
-			e = alt->endpoint + ep;
-			if (e->bmAttributes == USB_ENDPOINT_XFER_BULK){
-				if (((e->bEndpointAddress & USB_ENDPOINT_DIR_MASK)==USB_DIR_IN) && !in){
-						in = e;
-				} else if (((e->bEndpointAddress & USB_ENDPOINT_DIR_MASK)==USB_DIR_OUT) && !out){
-						out = e;
-				}
-			}
-			if (in && out)
-				goto ep_found;
-		}
-	}
-
-ep_found:
-
-	if(!in || !out)
-		return -EINVAL;
-
-	tmp = usb_set_interface (dev->udev, alt->bInterfaceNumber, alt->bAlternateSetting);
-	if (tmp < 0)
-		return tmp;
-
-	dev->in = usb_rcvbulkpipe (dev->udev,
-			in->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK);
-	dev->out = usb_sndbulkpipe (dev->udev,
-			out->bEndpointAddress & USB_ENDPOINT_NUMBER_MASK);
-	return 0;
-
-}
-#else
 int rt_get_endpoints(struct usbnet *dev, struct usb_interface *intf)
 {
 	struct usb_host_interface	*alt = NULL;
@@ -154,7 +100,6 @@ int rt_get_endpoints(struct usbnet *dev, struct usb_interface *intf)
 
 	return 0;
 }
-#endif
 
 /*-------------------------------------------------------------------------*/
 //	rt_skb_return:  (1) handle in-band command	(2) bypass packets to interface layer
@@ -162,10 +107,6 @@ int rt_get_endpoints(struct usbnet *dev, struct usb_interface *intf)
 void rt_skb_return (struct usbnet *dev, struct sk_buff *skb)
 {
 	iNIC_PRIVATE *rt = netdev_priv(dev->net);
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,24)
-	skb->dev = dev->net;
-#endif
 
 	skb->protocol = eth_type_trans (skb, dev->net);
 
@@ -244,9 +185,6 @@ static void rx_submit (struct usbnet *dev, struct urb *urb, unsigned flags)
 	usb_fill_bulk_urb (urb, dev->udev, dev->in,
 		skb->data, size, rx_complete, skb);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	urb->transfer_flags |= USB_ASYNC_UNLINK;
-#endif
 	spin_lock_irqsave (&dev->rxq.lock, lockflags);
 
 #ifdef RLK_INIC_USBDEV_GEN2
@@ -995,15 +933,6 @@ void rt_disconnect (struct usb_device *xdev, struct usb_interface *intf, void *p
 		return;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	if(pAd->sbdev.udev != xdev){
-		//printk("Error! usb_device not match\n");
-		/*   PACE_PATCH  */   
-		up(&wifi_reset_chip_sem);
-		/*   END PACE_PATCH   */
-		return;
-	}
-#else
 	if(pAd->sbdev.intf != intf){
 		//printk("Error! interface not match\n");
 		/*   PACE_PATCH  */   
@@ -1011,7 +940,6 @@ void rt_disconnect (struct usb_device *xdev, struct usb_interface *intf, void *p
 		/*   END PACE_PATCH   */
 		return;
 	}
-#endif
 
 	if (pAd->RaCfgObj.opmode == 0)
 	{
@@ -1032,13 +960,11 @@ void rt_disconnect (struct usb_device *xdev, struct usb_interface *intf, void *p
 
 	// devdbg(dev, "txq len=%d, rxq len=%d\n", dev->txq.qlen, dev->rxq.qlen);
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 	if(dev->data && dev->control){
 		driver = driver_of(intf);
 		usb_driver_release_interface(driver, dev->data);
 		usb_driver_release_interface(driver, dev->control);
 	}
-#endif
 
 	RaCfgExit(pAd);
 	gAdapter = NULL;
@@ -1110,14 +1036,7 @@ static int phase1_probe (struct usb_device *xdev, struct usb_interface *udev, co
 
 	RLK_STRCPY (net->name, "ra%d");
 	memcpy (net->dev_addr, node_id, sizeof node_id);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	net->hard_start_xmit = usbnet_start_xmit;
-	net->open = usbnet_open;
-	net->stop = usbnet_stop;
-	net->do_ioctl = rlk_inic_ioctl;
-#else
 	net->netdev_ops = &netdev_ops;
-#endif
 	net->get_stats = rt_net_get_stats;
 	if(csumoff == 1)
 		net->features |= NETIF_F_IP_CSUM;
@@ -1134,11 +1053,7 @@ static int phase1_probe (struct usb_device *xdev, struct usb_interface *udev, co
 
 	/* (3) probe iNIC bootcode info */
 	rlk_inic_udev = pAd->sbdev.udev;
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	usb_get_dev(rlk_inic_udev);
-#else
 	rlk_inic_udev = usb_get_dev(rlk_inic_udev);
-#endif
 	RLK_INICProbePostConfig(pAd,0);
 
 	pAd->flag = FLAG_READY_MODE;
@@ -1272,16 +1187,10 @@ int rt_generic_bind(struct usbnet *dev, struct usb_interface *intf)
 	int				status=0;
 	struct usb_driver		*driver;
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 	dev->control = intf;
 	driver = driver_of(dev->control);
 	dev->data = intf;
 	dev->hard_mtu = 1518;
-#else
-	dev->control = dev->udev->config->interface;
-	dev->data = dev->udev->config->interface;
-	dev->hard_mtu = 1518;
-#endif
 
 #else
 	u8				*buf;
@@ -1289,16 +1198,10 @@ int rt_generic_bind(struct usbnet *dev, struct usb_interface *intf)
 	struct usb_driver		*driver;
 
 /* there should be 2 usb_interface (control, data) */
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-	buf  = dev->udev->config->interface->altsetting->extra;
-	len  = dev->udev->config->interface->altsetting->extralen;
-	dev->control = dev->udev->config->interface;
-#else
 	buf  = intf->cur_altsetting->extra;
 	len  = intf->cur_altsetting->extralen;
 	dev->control = intf;
 	driver = driver_of(dev->control);
-#endif
 
 	/* (1) find out control and data interface */
 	len = len - buf[0];
@@ -1327,22 +1230,18 @@ int rt_generic_bind(struct usbnet *dev, struct usb_interface *intf)
 		dev->hard_mtu = le16_to_cpu(tmp);
 	}
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 	status = usb_driver_claim_interface(driver, dev->data, dev);
 
 	if (status < 0)
 		return status;
-#endif
 
 #endif // RLK_INIC_USBDEV_GEN2
 
 	status = rt_get_endpoints(dev, dev->data);
 
 	if (status < 0) {
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0)
 		/* ensure immediate exit from usbnet_disconnect */
 		usb_driver_release_interface(driver, dev->data);
-#endif
 		return status;
 	}
 
@@ -1371,32 +1270,6 @@ static const struct usb_device_id	products [] = {
 MODULE_DEVICE_TABLE(usb, products);
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
-/**************************************************************************/
-//tested for kernel 2.4 series
-/**************************************************************************/
-static void *rtusb_probe(struct usb_device *dev, UINT interface, const struct usb_device_id *id)
-{
-	if(rt_probe(dev, NULL, id)<0)
-		return 0;
-	else
-		return 1;
-}
-
-//Disconnect function is called within exit routine
-static void rtusb_disconnect(struct usb_device *dev, void *ptr)
-{
-	rt_disconnect(dev, NULL, ptr);
-}
-
-static struct usb_driver rlk_inic_drv = {
-	name:"rlk_inic_drv",
-	probe:rtusb_probe,
-	id_table:products,
-	disconnect:rtusb_disconnect,
-};
-
-#else
 /**************************************************************************/
 //tested for kernel 2.6series
 /**************************************************************************/
@@ -1445,9 +1318,6 @@ static int rtusb_resume(struct usb_interface *intf)
 }
 
 static struct usb_driver rlk_inic_drv = {
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,15)
-	.owner = THIS_MODULE,
-#endif
 	.name =		"rlk_inic_drv",
 	.id_table =	products,
 	.probe =	rtusb_probe,
@@ -1455,8 +1325,6 @@ static struct usb_driver rlk_inic_drv = {
 	.suspend =	rtusb_suspend,
 	.resume =	rtusb_resume,
 };
-
-#endif // LINUX_VERSION_CODE //
 
 
 static int __init cdc_init(void)

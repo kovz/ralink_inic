@@ -395,7 +395,7 @@ void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *
 #if IW_HANDLER_VERSION < 7
 		//dev->get_wireless_stats = rlk_inic_get_wireless_stats;
 #endif // IW_HANDLER_VERSION < 7 //
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,21) || defined(CONFIG_WIRELESS_EXT)
+#if defined(CONFIG_WIRELESS_EXT)
 		//dev->wireless_handlers = (struct iw_handler_def *) &rlk_inic_iw_handler_def;
 		dev->wireless_handlers = get_wireless_handler();
 #endif
@@ -2527,9 +2527,7 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 					
 					range->we_version_compiled = 19;
 					range->we_version_source   = 19;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,24)
 					range->scan_capa = IW_SCAN_CAPA_ESSID | IW_SCAN_CAPA_CHANNEL;
-#endif
 				}
 
 				if (copy_to_user(user, payload, len))
@@ -3673,9 +3671,7 @@ boolean CardInfoRead(
 	u32 card_index;
 	s8 card_info_path[30];
 
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 	struct cred *override_cred, *old_cred;
-#endif
 
 	// init
 	buffer = kmalloc(MAX_INI_BUFFER_SIZE, MEM_ALLOC_FLAG);
@@ -3689,11 +3685,6 @@ boolean CardInfoRead(
 		return NDIS_STATUS_FAILURE;
 	}
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	orgfsuid = current->fsuid;
-	orgfsgid = current->fsgid;
-	current->fsuid = current->fsgid = 0;
-#else
 	orgfsuid = current_fsuid();
 	orgfsgid = current_fsgid();
 	override_cred = prepare_creds();
@@ -3702,7 +3693,6 @@ boolean CardInfoRead(
 	override_cred->fsuid = 0;
 	override_cred->fsgid = 0;
 	old_cred = override_creds(override_cred);
-#endif
 
 	orgfs = get_fs();
 	set_fs(KERNEL_DS);
@@ -3875,13 +3865,8 @@ boolean CardInfoRead(
 	// close file
 	retval = filp_close(srcf, NULL);
 	set_fs(orgfs);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	current->fsuid = orgfsuid;
-	current->fsgid = orgfsgid;
-#else
 	revert_creds(old_cred);
 	put_cred(override_cred);
-#endif
 	kfree(buffer);
 	kfree(tmpbuf);
 	return flg_match_ok;
@@ -3909,9 +3894,7 @@ boolean ConcurrentCardInfoRead(void)
 	s8 card_info_path[256];
 	int card_idx;
 	int i;
-#if LINUX_VERSION_CODE > KERNEL_VERSION(2,6,28)
 	struct cred *override_cred, *old_cred;
-#endif	
 	// init 
 
 	for(i = 0;i < CONCURRENT_CARD_NUM; i++)
@@ -3927,11 +3910,6 @@ boolean ConcurrentCardInfoRead(void)
 		kfree(buffer);
 		return NDIS_STATUS_FAILURE;
 	}
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	orgfsuid = current->fsuid;
-	orgfsgid = current->fsgid;
-	current->fsuid = current->fsgid = 0;
-#else
 	orgfsuid = current_fsuid();
 	orgfsgid = current_fsgid();
 	override_cred = prepare_creds();
@@ -3940,7 +3918,6 @@ boolean ConcurrentCardInfoRead(void)
 	override_cred->fsuid = GLOBAL_ROOT_UID;
 	override_cred->fsgid = GLOBAL_ROOT_GID;
 	old_cred = (struct cred *)override_creds(override_cred);
-#endif
 	orgfs = get_fs();
 	set_fs(KERNEL_DS);
 
@@ -4035,13 +4012,8 @@ boolean ConcurrentCardInfoRead(void)
 	// close file
 	retval = filp_close(srcf, NULL);
 	set_fs(orgfs);
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,28)
-	current->fsuid = orgfsuid;
-	current->fsgid = orgfsgid;
-#else
 	revert_creds(old_cred);
 	put_cred(override_cred);
-#endif
 	kfree(buffer);
 	kfree(tmpbuf);
 	return flg_match_ok;
