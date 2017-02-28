@@ -97,11 +97,11 @@ iNIC_PRIVATE *gAdapter[2];
 	static struct net_device_ops Netdev_Ops[2];
 
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
-DECLARE_BR_HANDLE_FRAME(org_br_handle_frame, p, skb, pskb);
+static struct sk_buff *(*org_br_handle_frame)(struct net_bridge_port *p, struct sk_buff *skb);
 
-DEFINE_BR_HANDLE_FRAME(my_br_handle_frame, p, skb, pskb) {
+static struct sk_buff *my_br_handle_frame(struct net_bridge_port *p,
+		struct sk_buff *skb){
 	iNIC_PRIVATE *pAd = gAdapter[0];
-	DECLARE_BR_HANDLE_FRAME_SKB(skb, pskb);
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	DispatchAdapter(&pAd, skb);
@@ -112,9 +112,9 @@ DEFINE_BR_HANDLE_FRAME(my_br_handle_frame, p, skb, pskb) {
 	if ((skb->protocol == 0xFFFF) && pAd) {
 
 		if (racfg_frame_handle(pAd, skb)) {
-			return BR_HOOK_HANDLED;
+			return NULL;
 		}
-		return BR_HOOK_NOT_HANDLED;
+		return skb;
 	} else {
 		// check vlan and in-band, then remove vlan tag
 		if ((((htons(skb->protocol) >> 8) & 0xff) == 0x81)
@@ -135,28 +135,28 @@ DEFINE_BR_HANDLE_FRAME(my_br_handle_frame, p, skb, pskb) {
 			DispatchAdapter(&pAd, skb);
 			if (pAd == NULL) {
 				printk("Warnning: DEFINE_BR_HANDLE_FRAME pAd is NULL\n");
-				return BR_HOOK_NOT_HANDLED;
+				return skb;
 			}
 
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
 			if (racfg_frame_handle(pAd, skb)) {
-				return BR_HOOK_HANDLED;
+				return NULL;
 			}
-			return BR_HOOK_NOT_HANDLED;
+			return skb;
 		}
 
 		if (org_br_handle_frame) {
-			return BR_HANDLE_FRAME(org_br_handle_frame, p, skb, pskb);
+			return org_br_handle_frame(p, skb);
 			/*
 			 printk("bridge recv: %04x, ret=%d, (handled=%d, not handled=%d)\n",
-			 skb->protocol, ret, BR_HOOK_HANDLED, BR_HOOK_NOT_HANDLED);
+			 skb->protocol, ret, NULL, skb);
 			 */
 		}
 		kfree_skb(skb);
-		return BR_HOOK_HANDLED;
+		return NULL;
 	}
-	return BR_HOOK_NOT_HANDLED;
+	return skb;
 }
 #endif
 
@@ -164,7 +164,8 @@ DEFINE_BR_HANDLE_FRAME(my_br_handle_frame, p, skb, pskb) {
  *      Receive an in-band command from the device layer.
  */
 
-DEFINE_PACKET_TYPE_FUNC(in_band_rcv, skb, dev, pt, orig_dev) {
+static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
+                    struct packet_type *pt, struct net_device *orig_dev) {
 	iNIC_PRIVATE *pAd = gAdapter[0];
 	struct net_device_stats *stats = &pAd->net_stats;
 
@@ -202,7 +203,8 @@ static struct packet_type in_band_packet_type = { .type = __constant_htons(
 
 //#define DEBUG_HOOK 1
 #ifdef DEBUG_HOOK
-DEFINE_PACKET_TYPE_FUNC(sniff_arp, skb, dev, pt, orig_dev) {
+static int sniff_arp(struct sk_buff *skb, struct net_device *dev, \
+                    struct packet_type *pt, struct net_device *orig_dev) {
 	if (skb->pkt_type == PACKET_OUTGOING) {
 		kfree_skb(skb);
 		return NET_RX_SUCCESS;
@@ -221,7 +223,7 @@ static struct packet_type arp_packet_type = { .type = __constant_htons(0x0806),
 void racfg_inband_hook_init(iNIC_PRIVATE *pAd) {
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
 	if (br_should_route_hook) {
-		org_br_handle_frame = br_should_route_hook;
+		org_br_handle_frame = br_route_hook;
 		printk("Org bridge hook = %p\n", org_br_handle_frame);
 		br_should_route_hook = my_br_handle_frame;
 		printk("Change bridge hook = %p\n", br_should_route_hook);

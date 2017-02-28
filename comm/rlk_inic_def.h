@@ -473,23 +473,9 @@ struct vlan_tic
 #endif
 } __attribute__((packed));
 
-
-
 #define GET_SKB_HARD_HEADER_LEN(_x)  (_x->cb[0])
 #define SET_SKB_HARD_HEADER_LEN(_x, _y)  (_x->cb[0] = _y)
 
-#define BR_HOOK_NOT_HANDLED skb
-#define BR_HOOK_HANDLED     NULL
-#define DECLARE_BR_HANDLE_FRAME(func, p, skb, pskb) \
-    static struct sk_buff *(*func)(struct net_bridge_port *p, struct sk_buff *skb)
-#define DEFINE_BR_HANDLE_FRAME(func, p, skb, pskb) \
-    static struct sk_buff *func(struct net_bridge_port *p, struct sk_buff *skb)
-#define DECLARE_BR_HANDLE_FRAME_SKB(skb, pskb)
-#define BR_HANDLE_FRAME(func, p, skb, pskb) \
-    func(p, skb)
-#define DEFINE_PACKET_TYPE_FUNC(func, skb, dev, pt, orig_dev) \
-    static int func(struct sk_buff *skb, struct net_device *dev, \
-                    struct packet_type *pt, struct net_device *orig_dev)
 
 typedef struct pid * THREAD_PID;
 #define THREAD_PID_INIT_VALUE NULL
