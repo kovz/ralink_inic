@@ -3,20 +3,6 @@
 #include "net/sch_generic.h"
 #endif
 
-#ifndef HAVE_FREE_NETDEV
-inline void free_netdev(struct net_device *dev)
-{
-	kfree(dev);
-}
-#endif
-
-#ifndef HAVE_NETDEV_PRIV
-inline void *netdev_priv(struct net_device *dev)
-{
-	return dev->priv;
-}
-#endif
-
 #define NETIF_RX_COMPLETE(dev, napi) 	napi_complete(napi)
 #define NETIF_RX_SCHEDULE_PREP(dev, napi) 	napi_schedule_prep(napi)
 #define __NETIF_RX_SCHEDULE(dev, napi)		__napi_schedule(napi)
