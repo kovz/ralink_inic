@@ -81,7 +81,7 @@ extern int SendFragmentPackets(iNIC_PRIVATE *pAd, unsigned short cmd_type,
 
 iNIC_PRIVATE *gAdapter[2];
 
-	static struct net_device_ops Netdev_Ops[2];
+static struct net_device_ops Netdev_Ops[2];
 
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
 //static struct sk_buff *(*org_br_handle_frame)(struct net_bridge_port *p, struct sk_buff *skb);
@@ -410,7 +410,7 @@ static struct net_device_stats *mii_get_stats(struct net_device *netdev) {
 }
 
 static int __init rlk_inic_init(void) {
-	int i, rc = 0;
+	int i, rc = 0, err = 0;
 	char name[8];
 	iNIC_PRIVATE *pAd;
 	struct net_device *dev, *device, *master;
@@ -426,8 +426,7 @@ static int __init rlk_inic_init(void) {
 	}
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
-	master = DEV_GET_BY_NAME(miimaster)
-	;
+	master = DEV_GET_BY_NAME(miimaster);
 	if (master == NULL) {
 		printk("ERROR! Please assign miimaster=[MII master device name] "
 				"at module insertion.\n");
@@ -440,7 +439,7 @@ static int __init rlk_inic_init(void) {
 		return -EINVAL;
 	}
 
-	int err = gpio_request(reset_gpio, "reset");
+	err = gpio_request(reset_gpio, "reset");
 
 	if (err) {
 		printk(KERN_ERR "gpio_request failed for %u, err=%d\n", reset_gpio,
@@ -486,8 +485,7 @@ static int __init rlk_inic_init(void) {
 		snprintf(name, sizeof(name), "%s%d", INIC_INFNAME, i);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
-		device = DEV_GET_BY_NAME(name)
-		;
+		device = DEV_GET_BY_NAME(name);
 		if (device == NULL)
 			break;
 		dev_put(device);
@@ -571,8 +569,7 @@ static int __init rlk_inic_init(void) {
 	for (i = 0; i < 32; i++) {
 		snprintf(name, sizeof(name), "%s01_%d", INIC_INFNAME, i);
 
-		device = DEV_GET_BY_NAME(name)
-		;
+		device = DEV_GET_BY_NAME(name);
 		if (device == NULL)
 			break;
 		dev_put(device);
@@ -668,3 +665,4 @@ static void __exit rlk_inic_exit(void) {
 
 module_exit(rlk_inic_exit);
 
+MODULE_LICENSE("GPL");
