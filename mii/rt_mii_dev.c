@@ -31,7 +31,7 @@ module_param (root, charp, 0);
 MODULE_PARM_DESC(root, DRV_NAME ": firmware and profile path offset");
 #endif
 module_param(debug, int, 0);
-module_param(bridge, int, 1);
+module_param(bridge, int, 0);
 module_param(csumoff, int, 0);
 module_param(mode, charp, 0);
 module_param(mac, charp, 0);
@@ -42,7 +42,7 @@ module_param(mac2, charp, 0);
 
 module_param(max_fw_upload, int, 0);
 module_param(miimaster, charp, 0);
-module_param(syncmiimac, int, 1);
+module_param(syncmiimac, int, 0);
 module_param(reset_gpio, int, 0);
 
 MODULE_PARM_DESC(debug, DRV_NAME ": bitmapped message enable number");
@@ -69,6 +69,7 @@ MODULE_PARM_DESC (syncmiimac, DRV_NAME ": sync MAC with MII master");
 static int mii_open(struct net_device *dev);
 static int mii_close(struct net_device *dev);
 static int mii_send_packet(struct sk_buff *skb, struct net_device *dev);
+static struct net_device_stats *mii_get_stats(struct net_device *netdev);
 
 static int mii_hardware_reset(int op) {
 	gpio_set_value(reset_gpio, op);
@@ -79,9 +80,25 @@ extern int SendFragmentPackets(iNIC_PRIVATE *pAd, unsigned short cmd_type,
 		unsigned short cmd_id, unsigned short cmd_seq, unsigned short dev_type,
 		unsigned short dev_id, unsigned char *msg, int total);
 
-iNIC_PRIVATE *gAdapter[2];
+iNIC_PRIVATE *gAdapter[CONCURRENT_CARD_NUM];
 
-static struct net_device_ops Netdev_Ops[2];
+static const struct net_device_ops Netdev_Ops[CONCURRENT_CARD_NUM] =
+{
+		{
+				.ndo_open = mii_open,
+				.ndo_stop = mii_close,
+				.ndo_start_xmit = mii_send_packet,
+				.ndo_do_ioctl = rlk_inic_ioctl,
+				.ndo_get_stats = mii_get_stats
+		},
+		{
+				.ndo_open = mii_open,
+				.ndo_stop = mii_close,
+				.ndo_start_xmit = mii_send_packet,
+				.ndo_do_ioctl = rlk_inic_ioctl,
+				.ndo_get_stats = mii_get_stats
+		}
+};
 
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
 //static struct sk_buff *(*org_br_handle_frame)(struct net_bridge_port *p, struct sk_buff *skb);
@@ -410,7 +427,7 @@ static struct net_device_stats *mii_get_stats(struct net_device *netdev) {
 }
 
 static int __init rlk_inic_init(void) {
-	int i, rc = 0, err = 0;
+	int i, rc = 0;
 	char name[8];
 	iNIC_PRIVATE *pAd;
 	struct net_device *dev, *device, *master;
@@ -421,8 +438,7 @@ static int __init rlk_inic_init(void) {
 
 	if (syncmiimac != 0) {
 		syncmiimac = 0;
-		printk(
-				"Warnning!! syncmiimac is foreced to 0 in dual concurrent mode.\n");
+		printk("Warnning!! syncmiimac is foreced to 0 in dual concurrent mode.\n");
 	}
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
@@ -430,25 +446,25 @@ static int __init rlk_inic_init(void) {
 	if (master == NULL) {
 		printk("ERROR! Please assign miimaster=[MII master device name] "
 				"at module insertion.\n");
-		return -1;
+		return -ENODEV;
 	}
 	dev_put(master);
 
-	if (!gpio_is_valid(reset_gpio)) {
-		printk(KERN_ERR "gpio number invalid\n");
+	if(-1 == reset_gpio){
+		printk("ERROR! Please assign reset_gpio=[reset GPIO num] "
+				"at module insertion.\n");
+		return -ENODEV;
+	} else if (!gpio_is_valid(reset_gpio)) {
+		printk(KERN_ERR "ERROR! gpio number invalid\n");
 		return -EINVAL;
 	}
 
-	err = gpio_request(reset_gpio, "reset");
+	rc = gpio_request(reset_gpio, "reset");
 
-	if (err) {
-		printk(KERN_ERR "gpio_request failed for %u, err=%d\n", reset_gpio,
-				err);
-		return -1;
-		//TODO : freeing something?
+	if (rc) {
+		printk(KERN_ERR "ERROR! gpio_request failed for %u, err=%d\n", reset_gpio,	rc);
+		return rc;
 	}
-
-	pAd->hardware_reset = mii_hardware_reset;
 
 #ifdef MODULE
 	printk("%s", version);
@@ -469,13 +485,11 @@ static int __init rlk_inic_init(void) {
 	pAd->dev = dev;
 	pAd->master = master;
 
+	pAd->hardware_reset = mii_hardware_reset;
+
 	spin_lock_init(&pAd->lock);
-	Netdev_Ops[0].ndo_open = mii_open;
-	Netdev_Ops[0].ndo_stop = mii_close;
-	Netdev_Ops[0].ndo_start_xmit = mii_send_packet;
-	Netdev_Ops[0].ndo_do_ioctl = rlk_inic_ioctl;
-	Netdev_Ops[0].ndo_get_stats = mii_get_stats;
-	dev->netdev_ops = (const struct net_device_ops *) &Netdev_Ops[0];
+	dev->netdev_ops = &Netdev_Ops[0];
+
 	//dev->weight             = 64;	/* arbitrary? from NAPI_HOWTO.txt. */
 
 	for (i = 0; i < 32; i++) {
@@ -492,6 +506,7 @@ static int __init rlk_inic_init(void) {
 	}
 	if (i == 32) {
 		printk(KERN_ERR "No available dev name\n");
+		rc = -ENODEV;
 		goto err_out_free;
 	}
 
@@ -524,7 +539,8 @@ static int __init rlk_inic_init(void) {
 	RaCfgInit(pAd, dev, mac, mode, bridge, csumoff);
 
 	rc = register_netdev(dev);
-
+	if(rc)
+		goto err_out_free;
 	DBGPRINT("%s: Ralink iNIC at 0x%lx, "
 			"%02x:%02x:%02x:%02x:%02x:%02x\n", dev->name, dev->base_addr,
 			dev->dev_addr[0], dev->dev_addr[1], dev->dev_addr[2],
@@ -548,7 +564,8 @@ static int __init rlk_inic_init(void) {
 	dev2 = alloc_etherdev(sizeof(iNIC_PRIVATE));
 	if (!dev2) {
 		printk("Can't alloc net device!\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto err_out_free;
 	}
 	SET_MODULE_OWNER(dev2);
 
@@ -561,11 +578,11 @@ static int __init rlk_inic_init(void) {
 	pAd2->dev = dev2;
 	pAd2->master = master;
 	spin_lock_init(&pAd2->lock);
-	Netdev_Ops[1].ndo_open = mii_open;
-	Netdev_Ops[1].ndo_stop = mii_close;
-	Netdev_Ops[1].ndo_start_xmit = mii_send_packet;
-	Netdev_Ops[1].ndo_do_ioctl = rlk_inic_ioctl;
-	dev2->netdev_ops = (const struct net_device_ops *) &Netdev_Ops[1];
+//	Netdev_Ops[1].ndo_open = mii_open;
+//	Netdev_Ops[1].ndo_stop = mii_close;
+//	Netdev_Ops[1].ndo_start_xmit = mii_send_packet;
+//	Netdev_Ops[1].ndo_do_ioctl = rlk_inic_ioctl;
+	dev2->netdev_ops = &Netdev_Ops[1];
 	for (i = 0; i < 32; i++) {
 		snprintf(name, sizeof(name), "%s01_%d", INIC_INFNAME, i);
 
@@ -576,6 +593,7 @@ static int __init rlk_inic_init(void) {
 	}
 	if (i == 32) {
 		printk(KERN_ERR "No available dev name\n");
+		rc = -ENODEV;
 		goto err_out_free;
 	}
 
@@ -590,6 +608,8 @@ static int __init rlk_inic_init(void) {
 	RaCfgInit(pAd2, dev2, mac2, mode, bridge, csumoff);
 
 	rc = register_netdev(dev2);
+	if(rc)
+		goto err_out_free;
 
 	DBGPRINT("%s: Ralink iNIC at 0x%lx, "
 			"%02x:%02x:%02x:%02x:%02x:%02x\n", dev2->name, dev2->base_addr,
@@ -606,7 +626,9 @@ static int __init rlk_inic_init(void) {
 
 	return rc;
 
-	err_out_free: free_netdev(dev);
+	err_out_free:
+	free_netdev(dev);
+	gpio_free(reset_gpio);
 	return rc;
 }
 module_init(rlk_inic_init);
@@ -661,6 +683,7 @@ static void __exit rlk_inic_exit(void) {
 
 	RaCfgExit(pAd);
 	free_netdev(dev);
+	gpio_free(reset_gpio);
 }
 
 module_exit(rlk_inic_exit);
