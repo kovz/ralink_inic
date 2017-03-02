@@ -329,8 +329,8 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 	int                     i=0;
 
 	struct cred *override_cred, *old_cred;
-
-
+	pAd->RaCfgObj.BssidNum = 2;
+	return TRUE;
 	buffer = kmalloc(MAX_INI_BUFFER_SIZE, MEM_ALLOC_FLAG);
 	if (buffer == NULL)
 		return FALSE;

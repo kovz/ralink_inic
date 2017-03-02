@@ -368,6 +368,8 @@ void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *
 
 	pAd->RaCfgObj.wait_completed = 0;
 	init_waitqueue_head(&pAd->RaCfgObj.waitQH);
+	init_waitqueue_head(&pAd->RaCfgObj.taskQH);
+	init_waitqueue_head(&pAd->RaCfgObj.backlogQH);
 
 	RTMP_SEM_INIT(&pAd->RaCfgObj.waitLock);
 	RTMP_SEM_INIT(&pAd->RaCfgObj.timerLock);
@@ -838,13 +840,19 @@ static int RaCfgBacklogThread(void *arg)
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg; 
 	// Allow the SIGKILL signal
 	allow_signal(SIGKILL);
+	int rc;
 	while (!kthread_should_stop()
 			&& !signal_pending(current))
 	{
 		HndlTask curr_task;
-		kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task);
+		if(kfifo_is_empty(&pAd->RaCfgObj.backlog_fifo))
+			rc = wait_event_interruptible(pAd->RaCfgObj.backlogQH, !kfifo_is_empty(&pAd->RaCfgObj.backlog_fifo));
+		if(rc)
+			continue;
+		if(!kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task))
+			continue;
 		if(curr_task.func)
-			curr_task.func(curr_task.arg);
+		curr_task.func(curr_task.arg);
 	}
 
 	do_exit(0);
@@ -863,17 +871,22 @@ static int RaCfgTaskThread(void *arg)
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg; 
 	u8  *buffer=NULL, *ptr;
 	HndlTask curr_task;
-
+	int rc;
 	allow_signal(SIGKILL);
 
 	while (!kthread_should_stop() && !signal_pending(current))
 	{
-		kfifo_get(&pAd->RaCfgObj.task_fifo, &curr_task);
+		if(kfifo_is_empty(&pAd->RaCfgObj.task_fifo))
+			rc = wait_event_interruptible(pAd->RaCfgObj.taskQH, !kfifo_is_empty(&pAd->RaCfgObj.task_fifo));
+		if(rc)
+			continue;
+		if(!kfifo_get(&pAd->RaCfgObj.task_fifo, &curr_task))
+			continue;
 		if(curr_task.func){
 			curr_task.func(curr_task.arg);
 			continue;
 		} else {
-			skb = (struct sk_buff *)arg;
+			skb = (struct sk_buff *)curr_task.arg;
 		}
 		// feedback command ...
 		p_racfgh =  (struct racfghdr *)skb->data;
@@ -2322,6 +2335,7 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 #ifdef FIX_POTENTIAL_BUG
 	char *accumulate_buffer = NULL;
 #endif
+	int rc;
 
 	if (wrq)
 	{
@@ -2374,7 +2388,12 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 			return status;
 		}
 
-		kfifo_get(&pAd->RaCfgObj.wait_fifo, &curr_task);
+		if(kfifo_is_empty(&pAd->RaCfgObj.wait_fifo))
+			rc = wait_event_interruptible(pAd->RaCfgObj.waitQH, !kfifo_is_empty(&pAd->RaCfgObj.wait_fifo));
+		if(rc)
+			continue;
+		if(!kfifo_get(&pAd->RaCfgObj.wait_fifo, &curr_task))
+			continue;
 		pAd->RaCfgObj.wait_completed--;
 		RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
 

@@ -366,12 +366,14 @@ typedef struct __RACFG_OBJECT
 	RETRY_PKT_INFO 		RPKTInfo;
 #endif
 
-	wait_queue_head_t           waitQH;
 	int                         wait_completed;
 	RTMP_SPIN_LOCK              waitLock;
 	DECLARE_KFIFO(task_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
+	wait_queue_head_t			taskQH;
 	DECLARE_KFIFO(backlog_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
+	wait_queue_head_t			backlogQH;
 	DECLARE_KFIFO(wait_fifo, HndlTask, MAX_LEN_OF_RACFG_QUEUE);
+	wait_queue_head_t           waitQH;
 
 	u8                          packet[1536];
 	u8                          wsc_updated_profile[MAX_PROFILE_SIZE];
