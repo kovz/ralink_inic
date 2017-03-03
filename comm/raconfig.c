@@ -2777,6 +2777,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			if (!(box = GetArgBox()))
 			{
 				printk("ERROR, can't alloc ArgBox\n");
+				kfree_skb(skb);
 				break;
 			}
 			box->arg1 = pAd;
@@ -2794,6 +2795,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		if (!(box = GetArgBox()))
 		{
 			printk("ERROR, can't alloc ArgBox\n");
+			kfree_skb(skb);
 			break;
 		}
 		box->arg1 = pAd;
@@ -2818,7 +2820,6 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 	case RACFG_CMD_BOOT_REGWR:
 		break;
 	}
-	kfree_skb(skb);
 }
 
 
