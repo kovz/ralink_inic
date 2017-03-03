@@ -2816,10 +2816,13 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				pAd->RaCfgObj.bLoadPhase = TRUE;
 #endif
 #endif
+		kfree_skb(skb);
 		break;
 	case RACFG_CMD_BOOT_REGRD:
+		kfree_skb(skb);
 		break;
 	case RACFG_CMD_BOOT_REGWR:
+		kfree_skb(skb);
 		break;
 	}
 }
@@ -2914,7 +2917,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 	// 
 
 	if (skb->protocol == ETH_P_RACFG && 
-		le32_to_cpu(p_racfgh->magic_no) == MAGIC_NUMBER)
+			le32_to_cpu(p_racfgh->magic_no) == MAGIC_NUMBER)
 	{
 		u16 command_type = le16_to_cpu(p_racfgh->command_type);
 		u16 command_id   = le16_to_cpu(p_racfgh->command_id);
@@ -2929,7 +2932,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 
 #ifdef 	CONFIG_CONCURRENT_INIC_SUPPORT	
 		if(((command_type&0x7FFF) == RACFG_CMD_TYPE_BOOTSTRAP)||
-			(((command_type&0x7FFF) == RACFG_CMD_TYPE_SYNC)&&(command_id == RACFG_CMD_GET_MAC)))
+				(((command_type&0x7FFF) == RACFG_CMD_TYPE_SYNC)&&(command_id == RACFG_CMD_GET_MAC)))
 		{
 			if((!gAdapter[0]->RaCfgObj.flg_is_open)&&!(gAdapter[1]->RaCfgObj.flg_is_open))
 			{
@@ -2940,40 +2943,40 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		else
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //			
 
-		// use flg_is_open instead of NETIF_IS_UP to judge if ra0 is up
-		// because NETIF_IS_UP won't true until host get MAC from iNIC
+			// use flg_is_open instead of NETIF_IS_UP to judge if ra0 is up
+			// because NETIF_IS_UP won't true until host get MAC from iNIC
 #ifdef NM_SUPPORT
-		if (!pAd->RaCfgObj.MBSSID[0].MSSIDDev)
+			if (!pAd->RaCfgObj.MBSSID[0].MSSIDDev)
 #else
-		if (!pAd->RaCfgObj.MBSSID[0].MSSIDDev || !pAd->RaCfgObj.flg_is_open)
+				if (!pAd->RaCfgObj.MBSSID[0].MSSIDDev || !pAd->RaCfgObj.flg_is_open)
 #endif
-		{
-#ifdef 	CONFIG_CONCURRENT_INIC_SUPPORT	
-			/* 
-			 * The system heart beat timer is on the main interface.
-			 * Even the main interface is not opened, the heart beat can be received. 
-			 */
-			if((command_type == RACFG_CMD_TYPE_ASYNC)&& (ConcurrentObj.CardCount > 0))
-			{
-				switch(command_id)
 				{
-					case RACFG_CMD_HEART_BEAT:
-					case RACFG_CMD_CONSOLE:
+#ifdef 	CONFIG_CONCURRENT_INIC_SUPPORT	
+					/*
+					 * The system heart beat timer is on the main interface.
+					 * Even the main interface is not opened, the heart beat can be received.
+					 */
+					if((command_type == RACFG_CMD_TYPE_ASYNC)&& (ConcurrentObj.CardCount > 0))
 					{
-			kfree_skb(skb);
-			return TRUE;
-		}
+						switch(command_id)
+						{
+						case RACFG_CMD_HEART_BEAT:
+						case RACFG_CMD_CONSOLE:
+						{
+							kfree_skb(skb);
+							return TRUE;
+						}
 						break;
-					default:
-						break;
+						default:
+							break;
+						}
+					}else
+#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+					{
+						kfree_skb(skb);
+						return TRUE;
+					}
 				}
-			}else			
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //				
-			{
-				kfree_skb(skb);
-				return TRUE;
-			}
-		}
 
 #if 1
 
@@ -2983,7 +2986,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			u8  *pSrcBufVA;
 			pSrcBufVA = skb->data-14;
 			if (memcmp(pSrcBufVA, pAd->master->dev_addr, 6) ||
-				memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
+					memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
 			{
 				kfree_skb(skb);
 				return TRUE;
@@ -2992,141 +2995,158 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		else
 #endif
 			if (pAd->RaCfgObj.bGetMac && !pAd->RaCfgObj.bRestartiNIC)
-		{
-			u8  *pSrcBufVA;
-
-			pSrcBufVA = skb->data-14;
-#if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
-			if (syncmiimac && pAd->RaCfgObj.bLocalAdminAddr)
-				pSrcBufVA[6] &= 0x7D;
-			else
-#endif
-			pSrcBufVA[6] &= 0xFE;
-			if (memcmp(pSrcBufVA, pAd->RaCfgObj.MainDev->dev_addr, 6) ||
-				memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
 			{
-				kfree_skb(skb);
-				return TRUE;
+				u8  *pSrcBufVA;
+
+				pSrcBufVA = skb->data-14;
+#if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
+				if (syncmiimac && pAd->RaCfgObj.bLocalAdminAddr)
+					pSrcBufVA[6] &= 0x7D;
+				else
+#endif
+					pSrcBufVA[6] &= 0xFE;
+				if (memcmp(pSrcBufVA, pAd->RaCfgObj.MainDev->dev_addr, 6) ||
+						memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
+				{
+					kfree_skb(skb);
+					return TRUE;
+				}
 			}
-		}
 #endif
 
 		switch (command_type)
 		{
 		case RACFG_CMD_TYPE_ASYNC | RACFG_CMD_TYPE_RSP_FLAG:
-			//printk("Receive feedback: command type=%04x\n", command_type);
-			if (command_id == RACFG_CMD_HEART_BEAT)
+		//printk("Receive feedback: command type=%04x\n", command_type);
+		if (command_id == RACFG_CMD_HEART_BEAT)
+		{
+			pAd->RaCfgObj.HeartBeatCount++;
+			if (pAd->RaCfgObj.bRestartiNIC)
 			{
-				pAd->RaCfgObj.HeartBeatCount++;
-				if (pAd->RaCfgObj.bRestartiNIC)
-				{
-					// make sure iNIC is ready for receiving commands
-					pAd->RaCfgObj.bRestartiNIC = FALSE;
-					RaCfgFifoRestart(pAd);
-				}
-				kfree_skb(skb);
+				// make sure iNIC is ready for receiving commands
+				pAd->RaCfgObj.bRestartiNIC = FALSE;
+				RaCfgFifoRestart(pAd);
 			}
-			else
-			{
-				FeedbackRspHandler(pAd, skb);
-			}
-			break;
+			kfree_skb(skb);
+		}
+		else
+		{
+			FeedbackRspHandler(pAd, skb);
+		}
+		break;
 		case RACFG_CMD_TYPE_SYNC         | RACFG_CMD_TYPE_RSP_FLAG:
-			if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
-			{
-				kfree_skb(skb);
-				break;
-			}
+		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
+		{
+			kfree_skb(skb);
+			break;
+		}
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_IWREQ_STRUC  | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_IW_HANDLER   | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_IOCTL_STATUS | RACFG_CMD_TYPE_RSP_FLAG:
-			IoctlRspHandler(pAd, skb);
-			break;
+		IoctlRspHandler(pAd, skb);
+		break;
 		case RACFG_CMD_TYPE_BOOTSTRAP | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_BOOTSTRAP:
 			RaCfgCommandHandler(pAd, skb);
 			break;
 
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)				
-				case RACFG_CMD_TYPE_IGMP_TUNNEL | RACFG_CMD_TYPE_RSP_FLAG:
-				{
-					u16 src_port = le16_to_cpu(p_racfgh->dev_id);
-					u16 payload_len = le16_to_cpu(p_racfgh->length);					
-					IgmpTunnelRcvPkt(p_racfgh->data, payload_len,src_port);		
-					kfree_skb(skb);
-					break;
-				}
+		case RACFG_CMD_TYPE_IGMP_TUNNEL | RACFG_CMD_TYPE_RSP_FLAG:
+		{
+			u16 src_port = le16_to_cpu(p_racfgh->dev_id);
+			u16 payload_len = le16_to_cpu(p_racfgh->length);
+			IgmpTunnelRcvPkt(p_racfgh->data, payload_len,src_port);
+			kfree_skb(skb);
+			break;
+		}
 		case RACFG_CMD_TYPE_TUNNEL| RACFG_CMD_TYPE_RSP_FLAG:
-			{
-				int bss_index = 0;
-				u8 *pSrcBufVA = NULL;
+		{
+			int bss_index = 0;
+			u8 *pSrcBufVA = NULL;
 
-				DBGPRINT("command_seq = %d, seq = %d \n", command_seq, seq);
-				DBGPRINT("eapol_command_seq = %d, eapol_seq = %d \n", 
+			DBGPRINT("command_seq = %d, seq = %d \n", command_seq, seq);
+			DBGPRINT("eapol_command_seq = %d, eapol_seq = %d \n",
 					pAd->RaCfgObj.eapol_command_seq, pAd->RaCfgObj.eapol_seq);
 
-				// Check packet sequence
-				if (seq == 0)
-				{
-					// Set a new packet sequence record
-					pAd->RaCfgObj.eapol_command_seq = command_seq;
-					pAd->RaCfgObj.eapol_seq = 0;
+			// Check packet sequence
+			if (seq == 0)
+			{
+				// Set a new packet sequence record
+				pAd->RaCfgObj.eapol_command_seq = command_seq;
+				pAd->RaCfgObj.eapol_seq = 0;
 
-					// Flush old eapol_skb
-					if (pAd->RaCfgObj.eapol_skb != NULL)
-					{
-						if (pAd->RaCfgObj.eapol_skb->len > 0)
-						{
-							printk("Warning: set a new packet sequence record, old eapol_skb len = %d\n", pAd->RaCfgObj.eapol_skb->len);                            
-							printk("Warning: ignore mismatch eapol packet\n");
-							pAd->RaCfgObj.eapol_skb->len = 0;
-							pAd->RaCfgObj.eapol_skb->tail = pAd->RaCfgObj.eapol_skb->data;
-						}
-					}
-				}
-				else
+				// Flush old eapol_skb
+				if (pAd->RaCfgObj.eapol_skb != NULL)
 				{
-					// Ingore mismatch packet sequence, and flush the eapol_skb
-					if ((pAd->RaCfgObj.eapol_command_seq != command_seq)||(pAd->RaCfgObj.eapol_seq != seq))
+					if (pAd->RaCfgObj.eapol_skb->len > 0)
 					{
+						printk("Warning: set a new packet sequence record, old eapol_skb len = %d\n", pAd->RaCfgObj.eapol_skb->len);
 						printk("Warning: ignore mismatch eapol packet\n");
-						pAd->RaCfgObj.eapol_seq = 0;
-						pAd->RaCfgObj.eapol_command_seq = 0;
 						pAd->RaCfgObj.eapol_skb->len = 0;
 						pAd->RaCfgObj.eapol_skb->tail = pAd->RaCfgObj.eapol_skb->data;
-						break;
 					}
 				}
-				pAd->RaCfgObj.eapol_seq ++;
+			}
+			else
+			{
+				// Ingore mismatch packet sequence, and flush the eapol_skb
+				if ((pAd->RaCfgObj.eapol_command_seq != command_seq)||(pAd->RaCfgObj.eapol_seq != seq))
+				{
+					printk("Warning: ignore mismatch eapol packet\n");
+					pAd->RaCfgObj.eapol_seq = 0;
+					pAd->RaCfgObj.eapol_command_seq = 0;
+					pAd->RaCfgObj.eapol_skb->len = 0;
+					pAd->RaCfgObj.eapol_skb->tail = pAd->RaCfgObj.eapol_skb->data;
+					break;
+				}
+			}
+			pAd->RaCfgObj.eapol_seq ++;
 
-				// Assemble EAPOL packet data				
+			// Assemble EAPOL packet data
+			if (pAd->RaCfgObj.eapol_skb == NULL)
+			{
+				pAd->RaCfgObj.eapol_skb = dev_alloc_skb(MAX_EAPOL_SIZE);
 				if (pAd->RaCfgObj.eapol_skb == NULL)
 				{
-					pAd->RaCfgObj.eapol_skb = dev_alloc_skb(MAX_EAPOL_SIZE);
-					if (pAd->RaCfgObj.eapol_skb == NULL)
-					{
-						kfree_skb(skb);
-						pAd->RaCfgObj.eapol_seq = 0;
-						pAd->RaCfgObj.eapol_command_seq = 0;
-						break;
-					}
-					skb_reserve(pAd->RaCfgObj.eapol_skb, 2);
-
-				}
-
-				if (pAd->RaCfgObj.eapol_skb->len + len <= (MAX_EAPOL_SIZE-2))
-				{
-					memcpy(skb_put(pAd->RaCfgObj.eapol_skb, len), 
-						   payload, len);
-
-					// free wrapped eapol frame
 					kfree_skb(skb);
+					pAd->RaCfgObj.eapol_seq = 0;
+					pAd->RaCfgObj.eapol_command_seq = 0;
+					break;
 				}
-				else
+				skb_reserve(pAd->RaCfgObj.eapol_skb, 2);
+
+			}
+
+			if (pAd->RaCfgObj.eapol_skb->len + len <= (MAX_EAPOL_SIZE-2))
+			{
+				memcpy(skb_put(pAd->RaCfgObj.eapol_skb, len),
+						payload, len);
+
+				// free wrapped eapol frame
+				kfree_skb(skb);
+			}
+			else
+			{
+				// free wrapped eapol frame
+				kfree_skb(skb);
+				pAd->RaCfgObj.eapol_seq = 0;
+				pAd->RaCfgObj.eapol_command_seq = 0;
+				pAd->RaCfgObj.eapol_skb->len = 0;
+				pAd->RaCfgObj.eapol_skb->tail = pAd->RaCfgObj.eapol_skb->data;
+				break;
+			}
+
+			if (len < MAX_FEEDBACK_LEN)
+			{
+				pSrcBufVA = pAd->RaCfgObj.eapol_skb->data;
+				// Map interface index by source MAC address
+				if (memcmp(pSrcBufVA, pAd->dev->dev_addr, 5) == 0)
+					bss_index = pSrcBufVA[5] - pAd->dev->dev_addr[5];
+
+				if((bss_index < 0)||(bss_index >= MAX_MBSSID_NUM))
 				{
-					// free wrapped eapol frame
-					kfree_skb(skb);
+					// Reset Assembled eapol frame.
 					pAd->RaCfgObj.eapol_seq = 0;
 					pAd->RaCfgObj.eapol_command_seq = 0;
 					pAd->RaCfgObj.eapol_skb->len = 0;
@@ -3134,60 +3154,43 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 					break;
 				}
 
-				if (len < MAX_FEEDBACK_LEN)
+				if(!NETIF_IS_UP(pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev))
 				{
-					pSrcBufVA = pAd->RaCfgObj.eapol_skb->data;
-					// Map interface index by source MAC address
-					if (memcmp(pSrcBufVA, pAd->dev->dev_addr, 5) == 0)
-						bss_index = pSrcBufVA[5] - pAd->dev->dev_addr[5];
-
-						if((bss_index < 0)||(bss_index >= MAX_MBSSID_NUM))
-					{
-							// Reset Assembled eapol frame. 
-						pAd->RaCfgObj.eapol_seq = 0;
-						pAd->RaCfgObj.eapol_command_seq = 0;
-						pAd->RaCfgObj.eapol_skb->len = 0;
-						pAd->RaCfgObj.eapol_skb->tail = pAd->RaCfgObj.eapol_skb->data;
-							break;
-						}
-
-						if(!NETIF_IS_UP(pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev))
-					{
-							// Reset Assembled eapol frame. 
-						pAd->RaCfgObj.eapol_seq = 0;
-						pAd->RaCfgObj.eapol_command_seq = 0;
-						pAd->RaCfgObj.eapol_skb->len = 0;
-						pAd->RaCfgObj.eapol_skb->tail = pAd->RaCfgObj.eapol_skb->data;
-						break;
-					}
-
-					// Fill sk_buff with information, and pass skb to network layer
-					pAd->RaCfgObj.eapol_skb->dev = pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev;
-					pAd->RaCfgObj.eapol_skb->protocol = 
-					eth_type_trans(pAd->RaCfgObj.eapol_skb, pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev);
-					pAd->RaCfgObj.eapol_skb->ip_summed = CHECKSUM_UNNECESSARY;
-					netif_receive_skb(pAd->RaCfgObj.eapol_skb);  
-
-					// Re-allocate a sk_buff
-					pAd->RaCfgObj.eapol_skb = dev_alloc_skb(MAX_EAPOL_SIZE);
-
-					if (pAd->RaCfgObj.eapol_skb)
-					{
-						skb_reserve(pAd->RaCfgObj.eapol_skb, 2);
-					}
+					// Reset Assembled eapol frame.
+					pAd->RaCfgObj.eapol_seq = 0;
+					pAd->RaCfgObj.eapol_command_seq = 0;
+					pAd->RaCfgObj.eapol_skb->len = 0;
+					pAd->RaCfgObj.eapol_skb->tail = pAd->RaCfgObj.eapol_skb->data;
+					break;
 				}
-				break;              
+
+				// Fill sk_buff with information, and pass skb to network layer
+				pAd->RaCfgObj.eapol_skb->dev = pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev;
+				pAd->RaCfgObj.eapol_skb->protocol =
+						eth_type_trans(pAd->RaCfgObj.eapol_skb, pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev);
+				pAd->RaCfgObj.eapol_skb->ip_summed = CHECKSUM_UNNECESSARY;
+				netif_receive_skb(pAd->RaCfgObj.eapol_skb);
+
+				// Re-allocate a sk_buff
+				pAd->RaCfgObj.eapol_skb = dev_alloc_skb(MAX_EAPOL_SIZE);
+
+				if (pAd->RaCfgObj.eapol_skb)
+				{
+					skb_reserve(pAd->RaCfgObj.eapol_skb, 2);
+				}
 			}
+			break;
+		}
 #endif				
 #ifdef WIDI_SUPPORT
 		case RACFG_CMD_TYPE_WIDI_NOTIFY | RACFG_CMD_TYPE_RSP_FLAG:
-			{
-				u16 msg_type = le16_to_cpu(p_racfgh->dev_type);
-				u16 payload_len = le16_to_cpu(p_racfgh->length);					
-				WIDINotify(pAd->RaCfgObj.MainDev, p_racfgh->data, payload_len, msg_type);		
-				kfree_skb(skb);
-				break;
-			}
+		{
+			u16 msg_type = le16_to_cpu(p_racfgh->dev_type);
+			u16 payload_len = le16_to_cpu(p_racfgh->length);
+			WIDINotify(pAd->RaCfgObj.MainDev, p_racfgh->data, payload_len, msg_type);
+			kfree_skb(skb);
+			break;
+		}
 #endif
 		}
 
