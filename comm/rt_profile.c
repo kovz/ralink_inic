@@ -1,5 +1,6 @@
 #include "rlk_inic.h"
 #include "rlk_inic_def.h"
+#include <linux/firmware.h>
 
 unsigned char BtoH(char ch)
 {
@@ -317,25 +318,20 @@ int profile_get_keyparameter(
 
 boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 {
-	unsigned char           *src;
-	struct file             *srcf;
-	int                     retval;
-	kuid_t					orgfsuid;
-	kgid_t					orgfsgid;
-	mm_segment_t            orgfs;
+	bool                     retval = TRUE;
 	char                    *buffer;
 	char                    *tmpbuf;
 	unsigned char           *macptr;                            
 	int                     i=0;
 
-	struct cred *override_cred, *old_cred;
-	pAd->RaCfgObj.BssidNum = 2;
-	return TRUE;
-	buffer = kmalloc(MAX_INI_BUFFER_SIZE, MEM_ALLOC_FLAG);
+	const struct firmware *fw;
+	const char *pf_name;
+
+	buffer = kcalloc(MAX_INI_BUFFER_SIZE, 1, MEM_ALLOC_FLAG);
 	if (buffer == NULL)
 		return FALSE;
 
-	tmpbuf = kmalloc(MAX_PARAM_BUFFER_SIZE, MEM_ALLOC_FLAG);
+	tmpbuf = kcalloc(MAX_PARAM_BUFFER_SIZE, 1, MEM_ALLOC_FLAG);
 	if (tmpbuf == NULL)
 	{
 		kfree(buffer);
@@ -344,191 +340,136 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 
 #ifdef MULTIPLE_CARD_SUPPORT
 	if (pAd->RaCfgObj.InterfaceNumber >= 0)
-		src = pAd->RaCfgObj.profile.read_name;
+		pf_name = pAd->RaCfgObj.profile.read_name;
 	else
 #endif //MULTIPLE_CARD_SUPPORT
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	if ((pAd->RaCfgObj.InterfaceNumber >= 0)&&(pAd->RaCfgObj.InterfaceNumber < CONCURRENT_CARD_NUM))
 	{
 		s8 idx = pAd->RaCfgObj.InterfaceNumber;
-		src = ConcurrentObj.Profile[idx].read_name;
+		pf_name = ConcurrentObj.Profile[idx].read_name;
 	}
 	else
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 	{
 		if (pAd->RaCfgObj.opmode)
-			src = INIC_AP_PROFILE_PATH;
+			pf_name = INIC_AP_PROFILE_PATH;
 		else
-			src	= INIC_STA_PROFILE_PATH;
+			pf_name	= INIC_STA_PROFILE_PATH;
 	}
 
-	// Save uid and gid used for filesystem access.
-	// Set user and group to 0 (root)	
-	orgfsuid = current_fsuid();
-	orgfsgid = current_fsgid();
-	override_cred = prepare_creds();
-	if (!override_cred)
-		return -ENOMEM;
-	override_cred->fsuid.val = 0;
-	override_cred->fsgid.val = 0;
-	old_cred = (struct cred *)override_creds(override_cred);
-	orgfs = get_fs();
-	set_fs(KERNEL_DS);
-
-	if (src && *src)
+	if (request_firmware_into_buf(&fw, pf_name, &pAd->dev->dev, buffer, MAX_INI_BUFFER_SIZE)) {
+		dev_err(&pAd->dev->dev, "failed to load profile: %s\n", pf_name);
+		retval = FALSE;
+		goto exit;
+	}
+	if (pAd->RaCfgObj.opmode)
 	{
-		char buf[MAX_FILE_NAME_SIZE];
-#ifdef DBG
+		// BssidNum; This must read first of other multiSSID field, so list this field first in configuration file
+		if (profile_get_keyparameter("BssidNum", tmpbuf, 25, buffer))
 		{
-			snprintf(buf, sizeof(buf), "%s%s", root, src);
-			src = buf;
-			srcf = filp_open(src, O_RDONLY, 0);
-		}
-#else
-		srcf = filp_open(src, O_RDONLY, 0);
-#endif
-		if (IS_ERR(srcf))
-		{
-			DBGPRINT("--> Error %ld opening %s\n", -PTR_ERR(srcf),src);
-		}
-		else
-		{
-			// The object must have a read method
-			if (srcf->f_op && srcf->f_op->read)
+			pAd->RaCfgObj.BssidNum = (unsigned char) simple_strtol(tmpbuf, 0, 10);
+			if (pAd->RaCfgObj.BssidNum > MAX_MBSSID_NUM)
 			{
-				memset(buffer, 0x00, MAX_INI_BUFFER_SIZE);
-				retval=srcf->f_op->read(srcf, buffer, MAX_INI_BUFFER_SIZE, &srcf->f_pos);
-				if (retval < 0)
-				{
-					DBGPRINT("--> Read %s error %d\n", src, -retval);
-				}
-				else
-				{
-					if (pAd->RaCfgObj.opmode)
-					{
-						// BssidNum; This must read first of other multiSSID field, so list this field first in configuration file
-						if (profile_get_keyparameter("BssidNum", tmpbuf, 25, buffer))
-						{
-							pAd->RaCfgObj.BssidNum = (unsigned char) simple_strtol(tmpbuf, 0, 10);
-							if (pAd->RaCfgObj.BssidNum > MAX_MBSSID_NUM)
-							{
-								pAd->RaCfgObj.BssidNum = MAX_MBSSID_NUM;
-								DBGPRINT("BssidNum=%d(MAX_MBSSID_NUM is %d)\n", pAd->RaCfgObj.BssidNum, MAX_MBSSID_NUM);
-							}
-							else
-							{
-								DBGPRINT("BssidNum=%d\n", pAd->RaCfgObj.BssidNum);
-							}
-						}
-						// VLAN_ID
-						if (profile_get_keyparameter("VLAN_ID", tmpbuf, 256, buffer))
-						{
-							for (i=0, macptr = rstrtok(tmpbuf,";"); macptr; macptr = rstrtok(NULL,";"), i++)
-							{
-								if (i >= pAd->RaCfgObj.BssidNum)
-								{
-									break;
-								}
-
-								pAd->RaCfgObj.MBSSID[i].vlan_id = simple_strtol(macptr, 0, 10);
-								DBGPRINT("VLAN_ID[%d]=%d\n", i, pAd->RaCfgObj.MBSSID[i].vlan_id);
-							}
-						}
-
-						// VLAN_TAG
-						if (profile_get_keyparameter("VLAN_TAG", tmpbuf, 256, buffer))
-						{
-							for (i=0, macptr = rstrtok(tmpbuf,";"); macptr; macptr = rstrtok(NULL,";"), i++)
-							{
-								if (i >= pAd->RaCfgObj.BssidNum)
-								{
-									break;
-								}
-
-								pAd->RaCfgObj.MBSSID[i].bVLAN_tag = (unsigned char) simple_strtol(macptr, 0, 10) > 0 ? TRUE : FALSE;
-								DBGPRINT("VLAN_TAG[%d]=%d\n", i, pAd->RaCfgObj.MBSSID[i].bVLAN_tag);
-							}
-						}
-
-						// WDS
-						if (profile_get_keyparameter("WdsEnable", tmpbuf, 10, buffer))
-						{
-
-							pAd->RaCfgObj.bWds = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
-						}
-
-						// APCLI
-						if (profile_get_keyparameter("ApCliEnable", tmpbuf, 10, buffer))
-						{
-
-							pAd->RaCfgObj.bApcli = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
-						}
-					}
-#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-					// Concurrent Related
-					if (profile_get_keyparameter("DisableRadio", tmpbuf, 10, buffer))
-					{
-						pAd->RaCfgObj.bRadioOff = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
-					}
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-					
-#ifdef MESH_SUPPORT
-					// MESH
-					if (profile_get_keyparameter("MeshEnable", tmpbuf, 10, buffer))
-					{
-						pAd->RaCfgObj.bMesh = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
-					}
-#endif // MESH_SUPPORT //					
-					if (profile_get_keyparameter("ExtEEPROM", tmpbuf, 10, buffer))
-					{
-						pAd->RaCfgObj.bExtEEPROM = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
-					}
-
-#ifdef WOWLAN_SUPPORT
-					if (profile_get_keyparameter("WAKEON_LAN", tmpbuf, 10, buffer))
-					{
-						pAd->RaCfgObj.bWoWlanUp = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
-						printk("bWoWlanUp=%d \n", pAd->RaCfgObj.bWoWlanUp);	
-					}
-					
-					
-					if (profile_get_keyparameter("WOW_INBAND_INTERVAL", tmpbuf, 25, buffer))
-					{	
-						pAd->RaCfgObj.WowInbandInterval = (unsigned char) simple_strtol(tmpbuf, 0, 10);
-						printk("WowInbandInterval=%d \n", pAd->RaCfgObj.WowInbandInterval);	
-					}
-					
-					
-#endif // WOWLAN_SUPPORT // 
-
-#if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
-					// For locally administered address
-					if (profile_get_keyparameter("LocalAdminAddr", tmpbuf, 10, buffer))
-					{
-						pAd->RaCfgObj.bLocalAdminAddr = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
-					}
-#endif
-				}
+				pAd->RaCfgObj.BssidNum = MAX_MBSSID_NUM;
+				DBGPRINT("BssidNum=%d(MAX_MBSSID_NUM is %d)\n", pAd->RaCfgObj.BssidNum, MAX_MBSSID_NUM);
 			}
 			else
 			{
-				DBGPRINT("--> %s does not have a write method\n", src);
-			}
-
-			retval=filp_close(srcf,NULL);
-
-			if (retval)
-			{
-				DBGPRINT("--> Error %d closing %s\n", -retval, src);
+				DBGPRINT("BssidNum=%d\n", pAd->RaCfgObj.BssidNum);
 			}
 		}
+		// VLAN_ID
+		if (profile_get_keyparameter("VLAN_ID", tmpbuf, 256, buffer))
+		{
+			for (i=0, macptr = rstrtok(tmpbuf,";"); macptr; macptr = rstrtok(NULL,";"), i++)
+			{
+				if (i >= pAd->RaCfgObj.BssidNum)
+				{
+					break;
+				}
+
+				pAd->RaCfgObj.MBSSID[i].vlan_id = simple_strtol(macptr, 0, 10);
+				DBGPRINT("VLAN_ID[%d]=%d\n", i, pAd->RaCfgObj.MBSSID[i].vlan_id);
+			}
+		}
+
+		// VLAN_TAG
+		if (profile_get_keyparameter("VLAN_TAG", tmpbuf, 256, buffer))
+		{
+			for (i=0, macptr = rstrtok(tmpbuf,";"); macptr; macptr = rstrtok(NULL,";"), i++)
+			{
+				if (i >= pAd->RaCfgObj.BssidNum)
+				{
+					break;
+				}
+
+				pAd->RaCfgObj.MBSSID[i].bVLAN_tag = (unsigned char) simple_strtol(macptr, 0, 10) > 0 ? TRUE : FALSE;
+				DBGPRINT("VLAN_TAG[%d]=%d\n", i, pAd->RaCfgObj.MBSSID[i].bVLAN_tag);
+			}
+		}
+
+		// WDS
+		if (profile_get_keyparameter("WdsEnable", tmpbuf, 10, buffer))
+		{
+
+			pAd->RaCfgObj.bWds = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
+		}
+
+		// APCLI
+		if (profile_get_keyparameter("ApCliEnable", tmpbuf, 10, buffer))
+		{
+
+			pAd->RaCfgObj.bApcli = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
+		}
+	}
+#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
+	// Concurrent Related
+	if (profile_get_keyparameter("DisableRadio", tmpbuf, 10, buffer))
+	{
+		pAd->RaCfgObj.bRadioOff = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
+	}
+#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+
+#ifdef MESH_SUPPORT
+	// MESH
+	if (profile_get_keyparameter("MeshEnable", tmpbuf, 10, buffer))
+	{
+		pAd->RaCfgObj.bMesh = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
+	}
+#endif // MESH_SUPPORT //					
+	if (profile_get_keyparameter("ExtEEPROM", tmpbuf, 10, buffer))
+	{
+		pAd->RaCfgObj.bExtEEPROM = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
 	}
 
-	set_fs(orgfs);
-	revert_creds(old_cred);
-	put_cred(override_cred);
+#ifdef WOWLAN_SUPPORT
+	if (profile_get_keyparameter("WAKEON_LAN", tmpbuf, 10, buffer))
+	{
+		pAd->RaCfgObj.bWoWlanUp = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
+		printk("bWoWlanUp=%d \n", pAd->RaCfgObj.bWoWlanUp);
+	}
+
+
+	if (profile_get_keyparameter("WOW_INBAND_INTERVAL", tmpbuf, 25, buffer))
+	{
+		pAd->RaCfgObj.WowInbandInterval = (unsigned char) simple_strtol(tmpbuf, 0, 10);
+		printk("WowInbandInterval=%d \n", pAd->RaCfgObj.WowInbandInterval);
+	}
+
+
+#endif // WOWLAN_SUPPORT // 
+
+#if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
+	// For locally administered address
+	if (profile_get_keyparameter("LocalAdminAddr", tmpbuf, 10, buffer))
+	{
+		pAd->RaCfgObj.bLocalAdminAddr = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
+	}
+#endif
+exit:
 	kfree(buffer);
 	kfree(tmpbuf);
 
-	return(TRUE);  
+	return retval;
 }
