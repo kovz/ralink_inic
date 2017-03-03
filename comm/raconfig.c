@@ -838,13 +838,15 @@ void RaCfgStateReset(iNIC_PRIVATE *pAd)
 static int RaCfgBacklogThread(void *arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg; 
+	HndlTask curr_task;
+
 	// Allow the SIGKILL signal
 	allow_signal(SIGKILL);
+
 	int rc;
 	while (!kthread_should_stop()
 			&& !signal_pending(current))
 	{
-		HndlTask curr_task;
 		if(kfifo_is_empty(&pAd->RaCfgObj.backlog_fifo))
 			rc = wait_event_interruptible(pAd->RaCfgObj.backlogQH, !kfifo_is_empty(&pAd->RaCfgObj.backlog_fifo));
 		if(rc)
@@ -852,7 +854,7 @@ static int RaCfgBacklogThread(void *arg)
 		if(!kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task))
 			continue;
 		if(curr_task.func)
-		curr_task.func(curr_task.arg);
+			curr_task.func(curr_task.arg);
 	}
 
 	do_exit(0);

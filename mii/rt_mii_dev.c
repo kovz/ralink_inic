@@ -577,6 +577,7 @@ static int __init rlk_inic_init(void) {
 
 	pAd2->dev = dev2;
 	pAd2->master = master;
+	pAd2->hardware_reset = NULL;
 	spin_lock_init(&pAd2->lock);
 //	Netdev_Ops[1].ndo_open = mii_open;
 //	Netdev_Ops[1].ndo_stop = mii_close;
