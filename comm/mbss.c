@@ -1,4 +1,5 @@
 #include "rlk_inic.h"
+#include <linux/rtnetlink.h>
 
 /*
 static void make_mbss_frame(
@@ -150,8 +151,7 @@ void rlk_inic_mbss_init (
 		new_dev_p->priv_flags       = INT_MBSSID; /* we are virtual interface */
 
 		/* register this device to OS */
-		register_netdevice(new_dev_p);
-
+		register_netdev(new_dev_p);
 		/* backup our virtual network interface */
 		ad_p->RaCfgObj.MBSSID[bss_index].MSSIDDev = new_dev_p;
 	} /* End of for */
