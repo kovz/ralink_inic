@@ -326,7 +326,8 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 
 	const struct firmware *fw;
 	const char *pf_name;
-
+	pAd->RaCfgObj.BssidNum = 2;
+	return TRUE;
 	buffer = kcalloc(MAX_INI_BUFFER_SIZE, 1, MEM_ALLOC_FLAG);
 	if (buffer == NULL)
 		return FALSE;
