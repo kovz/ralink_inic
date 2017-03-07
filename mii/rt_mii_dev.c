@@ -43,7 +43,7 @@ module_param(mac2, charp, 0);
 module_param(max_fw_upload, int, 0);
 module_param(miimaster, charp, 0);
 module_param(syncmiimac, int, 0);
-module_param(reset_gpio, int, 0);
+module_param(reset_gpio, int, 0644);
 
 MODULE_PARM_DESC(debug, DRV_NAME ": bitmapped message enable number");
 MODULE_PARM_DESC(mode, DRV_NAME ": iNIC operation mode: AP(default) or STA");
@@ -172,10 +172,10 @@ static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
                     struct packet_type *pt, struct net_device *orig_dev) {
 	iNIC_PRIVATE *pAd = gAdapter[0];
 	struct net_device_stats *stats = &pAd->net_stats;
-
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	DispatchAdapter(&pAd, skb);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+	DBGPRINT("skb: skb->pkt_type %x, pAd %x, skb->dev %x, pAd->dev %x\n", skb->pkt_type, pAd, skb->dev, pAd->master);
 
 	if (skb->pkt_type == PACKET_OUTGOING || pAd == NULL
 			|| pAd->master != skb->dev) {
@@ -185,6 +185,7 @@ static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
 
 	if (racfg_frame_handle(pAd, skb)) {
 		/* no need to call kfree_skb(), racfg_frame_handle() already does it itself */
+		printk("%s <---\n", __FUNCTION__);
 		return 0;
 	}
 
@@ -465,10 +466,16 @@ static int __init rlk_inic_init(void) {
 		printk(KERN_ERR "ERROR! gpio_request failed for %u, err=%d\n", reset_gpio,	rc);
 		return rc;
 	}
+	rc = gpio_direction_output(reset_gpio, 1);
+	if (rc) {
+			printk(KERN_ERR "ERROR! set reset gpio failed for %u, err=%d\n", reset_gpio, rc);
+			return rc;
+		}
 
 #ifdef MODULE
 	printk("%s", version);
 #endif
+
 	dev = alloc_etherdev(sizeof(iNIC_PRIVATE));
 	if (!dev) {
 		printk("Can't alloc net device!\n");
@@ -539,6 +546,7 @@ static int __init rlk_inic_init(void) {
 	RaCfgInit(pAd, dev, mac, mode, bridge, csumoff);
 
 	rc = register_netdev(dev);
+
 	if(rc)
 		goto err_out_free;
 	DBGPRINT("%s: Ralink iNIC at 0x%lx, "
