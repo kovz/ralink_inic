@@ -339,9 +339,9 @@ void RaCfgStartup(iNIC_PRIVATE *pAd);
 void RaCfgRestart(iNIC_PRIVATE *pAd);
 #endif
 
-void RaCfgWriteFile(iNIC_PRIVATE *pAd, FileHandle *fh, char *buff, int len);
-void RaCfgOpenFile(iNIC_PRIVATE *pAd, FileHandle *fh, int flag);
-void RaCfgCloseFile(iNIC_PRIVATE *pAd, FileHandle *fh);
+void RaCfgWriteFile(iNIC_PRIVATE *pAd, FWHandle *fh, char *buff, int len);
+int RaCfgOpenFile(iNIC_PRIVATE *pAd, FWHandle *fh, int flag);
+void RaCfgCloseFile(iNIC_PRIVATE *pAd, FWHandle *fh);
 void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *conf_mode, int built_bridge, int chk_sum_off);
 void RaCfgExit(iNIC_PRIVATE *pAd);
 void RaCfgSetUp(iNIC_PRIVATE *pAd, struct net_device *dev);
@@ -380,7 +380,7 @@ unsigned char BtoH(char ch);
 
 int  rlk_inic_start_xmit(struct sk_buff *skb, struct net_device *dev);
 
-boolean rlk_inic_read_profile(iNIC_PRIVATE *ad_p);
+void rlk_inic_read_profile(iNIC_PRIVATE *ad_p);
 
 int  rlk_inic_mbss_close(iNIC_PRIVATE *ad_p);
 void rlk_inic_mbss_remove(iNIC_PRIVATE *ad_p);
@@ -425,7 +425,7 @@ boolean CardInfoRead(iNIC_PRIVATE *pAd);
 #endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-boolean ConcurrentCardInfoRead(void);
+void ConcurrentCardInfoRead(void);
 void DispatchAdapter(iNIC_PRIVATE **ppAd, struct sk_buff *skb);
 void SetRadioOn(iNIC_PRIVATE *pAd, u8 Operation);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //

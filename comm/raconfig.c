@@ -1,5 +1,6 @@
 #include "rlk_inic.h"
 #include <linux/delay.h>
+#include <linux/firmware.h>
 
 #ifdef WOWLAN_SUPPORT
 #include <linux/suspend.h>
@@ -839,11 +840,10 @@ static int RaCfgBacklogThread(void *arg)
 {
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg; 
 	HndlTask curr_task;
-
+	int rc;
 	// Allow the SIGKILL signal
 	allow_signal(SIGKILL);
 
-	int rc;
 	while (!kthread_should_stop()
 			&& !signal_pending(current))
 	{
@@ -1109,63 +1109,46 @@ static int RaCfgTaskThread(void *arg)
 	return 0;
 }
 
-void RaCfgOpenFile(iNIC_PRIVATE *pAd, FileHandle *fh, int flag)
+int RaCfgOpenFile(iNIC_PRIVATE *pAd, FWHandle *pfwh, int flag)
 {
-	if (fh->fp)	return;
+	if (pfwh->fw)	return 0;
 
-	printk("Open file: %s\n", fh->name);
+	printk("Request file: %s\n", pfwh->name);
 
-	fh->seq  = 0;
-	fh->fp = filp_open(fh->name, flag, 0);
-	if (IS_ERR(fh->fp) || !fh->fp->f_op)
-	{
-		printk("RaCfgOpenFile--> Open file fail: %s\n", fh->name);
-		fh->fp = NULL;
-		return;
+	pfwh->seq  = 0;
+	pfwh->r_off = 0;
+	if(0 != request_firmware(&pfwh->fw, pfwh->name, &pAd->dev->dev)){
+		dev_err(&pAd->dev->dev, "Fail request file %s\n", pfwh->name);
+		return -1;
 	}
-	if ((flag == O_RDONLY || flag == O_RDWR) && !fh->fp->f_op->read)
-	{
-		printk("RaCfgOpenFile: No read method\n");
-		return;
-	}
-	if ((flag == O_WRONLY || flag == O_RDWR) && !fh->fp->f_op->write)
-	{
-		printk("RaCfgOpenFile: No write method\n");
-		return;
-	}
-
-
-	fh->seq = 0;
-	pAd->RaCfgObj.orgfs = get_fs();
-	set_fs(KERNEL_DS);
+	return 0;
 }
 
-void RaCfgCloseFile(iNIC_PRIVATE *pAd, FileHandle *fh)
+void RaCfgCloseFile(iNIC_PRIVATE *pAd, FWHandle *pfwh)
 {
 
-	if (!fh->fp)
+	if (!pfwh->fw)
 		return;
 
-	set_fs(pAd->RaCfgObj.orgfs);
-	if (filp_close(fh->fp, NULL))
-		printk("RaCfgLoadFile--> Close file error: %s\n", fh->name);
-	fh->fp = NULL;
-	fh->seq = 0;
-	fh->crc = 0;
+	release_firmware(pfwh->fw);
+	dev_info(&pAd->dev->dev, "Close file error: %s\n", pfwh->name);
+	pfwh->fw = NULL;
+	pfwh->seq = 0;
+	pfwh->crc = 0;
 }
 
-void RaCfgWriteFile(iNIC_PRIVATE *pAd, FileHandle *fh, char *buff, int len)
+void RaCfgWriteFile(iNIC_PRIVATE *pAd, FWHandle *pfwh, char *buff, int len)
 {
-	if (!fh->fp)
+	if (!pfwh->fw)
 		return;
 
-	if (!fh->fp->f_op->write)
-	{
-		printk("File System hasn't write handler to write file %s\n", fh->name);
+//	if (!fh->fp->f_op->write)
+//	{
+		printk("File System hasn't write handler to write file %s\n", pfwh->name);
 		return;
-	}
-
-	fh->fp->f_op->write(fh->fp, buff, len, &fh->fp->f_pos);
+//	}
+//
+//	fh->fp->f_op->write(fh->fp, buff, len, &fh->fp->f_pos);
 }
 
 /*! \brief  Initialize The RaCfgQueue
@@ -1388,26 +1371,27 @@ static void upload_timeout(uintptr_t arg)
 
 static void _upload_firmware(iNIC_PRIVATE *pAd)
 {
-	int len;
-	FileHandle *fh  = &pAd->RaCfgObj.firmware;
-	//struct file *fp = fh->fp;
-	struct file *fp;
+	int len, rest, room_left;
+	FWHandle *pFirmware  = &pAd->RaCfgObj.firmware;
 	static int total = 0;
 	unsigned char *last_hdr = 0;
 	unsigned char buff[CRC_HEADER_LEN];
 
-	if (!fh)	return;
-
-	fp = fh->fp;
-	if (!fp)	return;
+	if (!pFirmware->fw)	return;
 
 	//len = read(fw_fd, buffer, MAX_FEEDBACK_LEN);
-	len = fp->f_op->read(fp, pAd->RaCfgObj.upload_buf, MAX_FEEDBACK_LEN, &fp->f_pos);
+	if(pFirmware->r_off < pFirmware->fw->size){
+		rest = pFirmware->fw->size - pFirmware->r_off;
+		len = rest <= room_left ? rest : room_left;
+		memcpy(pAd->RaCfgObj.test_pool, &pFirmware->fw->data[pFirmware->r_off], len);
+		pFirmware->r_off += rest;
+		room_left -= len;
+	}
 
 	if (len > 0)
 	{
 		//DBGPRINT("(%d), len = %d\n", RaCfgObj.firmware.seq, len);
-		fh->crc = crc32(fh->crc, pAd->RaCfgObj.upload_buf, len);
+		pFirmware->crc = crc32(pFirmware->crc, pAd->RaCfgObj.upload_buf, len);
 
 		if (len >= CRC_HEADER_LEN)
 		{
@@ -1433,14 +1417,14 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 			last_hdr = buff;
 		}
 
-		memcpy(fh->hdr_src, last_hdr, CRC_HEADER_LEN);
-		ReadCrcHeader(&fh->hdr, last_hdr);
+		memcpy(pFirmware->hdr_src, last_hdr, CRC_HEADER_LEN);
+		ReadCrcHeader(&pFirmware->hdr, last_hdr);
 
 		memcpy(pAd->RaCfgObj.cmp_buf, pAd->RaCfgObj.upload_buf, len);
 
 #ifdef RETRY_PKT_SEND
 	memcpy(pAd->RaCfgObj.RPKTInfo.buffer, pAd->RaCfgObj.upload_buf, len);
-	pAd->RaCfgObj.RPKTInfo.Seq = fh->seq;
+	pAd->RaCfgObj.RPKTInfo.Seq = pFirmware->seq;
 	pAd->RaCfgObj.RPKTInfo.BootType = RACFG_CMD_BOOT_UPLOAD;
 	pAd->RaCfgObj.RPKTInfo.length = len;
 	pAd->RaCfgObj.RPKTInfo.retry = FwRetryCnt;
@@ -1455,9 +1439,9 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 #endif
 		SendRaCfgCommand(pAd, 
 						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_PASSIVE_MASK, 
-						 RACFG_CMD_BOOT_UPLOAD, len, fh->seq, 0, 0, 0, pAd->RaCfgObj.upload_buf);
+						 RACFG_CMD_BOOT_UPLOAD, len, pFirmware->seq, 0, 0, 0, pAd->RaCfgObj.upload_buf);
 		//printk("Send %d packet (%d bytes) to iNIC\n", fh->seq, len);
-		fh->seq++;
+		pFirmware->seq++;
 		total += len;
 		msleep (30);
 	}
@@ -1482,37 +1466,37 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 			SendRaCfgCommand(pAd, 
 						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_PASSIVE_MASK, 
 						 RACFG_CMD_BOOT_STARTUP, 0, 0, 0, 0, 0, NULL);
-			RaCfgCloseFile(pAd, fh);
+			RaCfgCloseFile(pAd, pFirmware);
 			return;
 		}
 #endif
 #endif
-		if (fh->hdr.magic_no != 0x18140801)
+		if (pFirmware->hdr.magic_no != 0x18140801)
 		{
 			printk("WARNING! %s has no crc record (magic_no=%04x),"
 				   "no firmware integrity is guaranteed...\n", 
-				   fh->name, fh->hdr.magic_no);
+				   pFirmware->name, pFirmware->hdr.magic_no);
 			goto done;
 		}
 
 		// final CRC = payload CRC + header CRC
-		crc = crc32(fh->hdr.crc, fh->hdr_src, CRC_HEADER_LEN);
+		crc = crc32(pFirmware->hdr.crc, pFirmware->hdr_src, CRC_HEADER_LEN);
 
-		if (fh->crc != crc)
+		if (pFirmware->crc != crc)
 		{
 			printk("ERROR! CRC error %04x <> [%04x,%04x], size:%d<->%d:\n"
 				   "\n==> %s is corrupted!\n\n", 
-				   fh->crc, fh->hdr.crc, crc, 
-				   total, fh->hdr.size,
-				   fh->name);
+				   pFirmware->crc, pFirmware->hdr.crc, crc,
+				   total, pFirmware->hdr.size,
+				   pFirmware->name);
 			goto close;
 		}
 
 		printk("Send %s Firmware Done\n", DRV_NAME);        
 		printk("===================================\n");
-		printk("version: %s\n", fh->hdr.version);
-		printk("size:    %d bytes\n", fh->hdr.size);
-		printk("date:    %s\n", fh->hdr.date);
+		printk("version: %s\n", pFirmware->hdr.version);
+		printk("size:    %d bytes\n", pFirmware->hdr.size);
+		printk("date:    %s\n", pFirmware->hdr.date);
 		printk("===================================\n\n");
 
 		done:
@@ -1524,7 +1508,7 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 						 RACFG_CMD_BOOT_STARTUP, 0, 0, 0, 0, 0, NULL);
 		close:
 		DBGPRINT("Close Firmware file\n");      
-		RaCfgCloseFile(pAd, fh);
+		RaCfgCloseFile(pAd, pFirmware);
 
 	} 
 }
@@ -1551,8 +1535,7 @@ int _append_extra_profile(iNIC_PRIVATE *pAd, int len)
 	int  addlen = 0;
 	int  ret    = 0;
 	int  space  = MAX_FEEDBACK_LEN - len;
-	int fpE2pStart, fpE2pEnd;
-	struct file *fpE2p = NULL;
+	FWHandle *pE2p = NULL;
 
 	if (space <= 0)
 		return 0;
@@ -1680,28 +1663,25 @@ int _append_extra_profile(iNIC_PRIVATE *pAd, int len)
 			pAd->RaCfgObj.bGetExtEEPROMSize = 1;    
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT			
-			pAd->RaCfgObj.ext_eeprom.fp = ConcurrentObj.ExtEeprom[0].fp;
+			pAd->RaCfgObj.ext_eeprom.fw = ConcurrentObj.ExtEeprom[0].fw;
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
-			fpE2p = pAd->RaCfgObj.ext_eeprom.fp;
-			if (!fpE2p)
+			pE2p = &pAd->RaCfgObj.ext_eeprom;
+			if (!pE2p->fw)
 			{
 				pAd->RaCfgObj.ExtEEPROMSize = 0;
 				printk("upload_profile Error : Can't read External EEPROM File\n");
 			}
 			else
 			{
-				fpE2pStart = fpE2p->f_op->llseek(fpE2p, 0, SEEK_SET);
-				fpE2pEnd = fpE2p->f_op->llseek(fpE2p, 0, SEEK_END);         
-				if (fpE2pEnd - fpE2pStart > MAX_EXT_EEPROM_SIZE)
+				if (pE2p->fw->size > MAX_EXT_EEPROM_SIZE)
 				{
 					pAd->RaCfgObj.ExtEEPROMSize = 0;
-					printk("upload_profile Error : External EEPROM File size(%d) > MAX_EXT_EEPROM_SIZE(%d)\n", (fpE2pEnd - fpE2pStart), MAX_EXT_EEPROM_SIZE);
+					printk("upload_profile Error : External EEPROM File size(%d) > MAX_EXT_EEPROM_SIZE(%d)\n", pE2p->fw->size, MAX_EXT_EEPROM_SIZE);
 				}
 				else
 				{
-					pAd->RaCfgObj.ExtEEPROMSize = fpE2pEnd - fpE2pStart;
-					fpE2pStart = fpE2p->f_op->llseek(fpE2p, 0, SEEK_SET);
+					pAd->RaCfgObj.ExtEEPROMSize = pE2p->fw->size;
 				}
 			}
 		}
@@ -1748,8 +1728,7 @@ int _append_extra_profile2(iNIC_PRIVATE *pAd, int len)
 	int  addlen = 0;
 	int  ret    = 0;
 	int  space  = MAX_FEEDBACK_LEN - len;
-	int fpE2pStart, fpE2pEnd;
-	struct file *fpE2p = NULL;
+	FWHandle *pE2p = NULL;
 
 	if (space <= 0)
 		return 0;
@@ -1792,7 +1771,7 @@ int _append_extra_profile2(iNIC_PRIVATE *pAd, int len)
 
 
 	pAd = gAdapter[1];
-	fpE2p = ConcurrentObj.ExtEeprom[1].fp;
+	pE2p = &ConcurrentObj.ExtEeprom[1];
 
 	if (pAd->RaCfgObj.bExtEEPROM)
 	{
@@ -1800,24 +1779,21 @@ int _append_extra_profile2(iNIC_PRIVATE *pAd, int len)
 		{
 			pAd->RaCfgObj.bGetExtEEPROMSize = 1;   
 
-			if (!fpE2p)
+			if (!pE2p->fw)
 			{
 				pAd->RaCfgObj.ExtEEPROMSize = 0;
 				printk("upload_profile Error : Can't read External EEPROM File\n");
 			}
 			else
 			{
-				fpE2pStart = fpE2p->f_op->llseek(fpE2p, 0, SEEK_SET);
-				fpE2pEnd = fpE2p->f_op->llseek(fpE2p, 0, SEEK_END);         
-				if (fpE2pEnd - fpE2pStart > MAX_EXT_EEPROM_SIZE)
+				if (pE2p->fw->size > MAX_EXT_EEPROM_SIZE)
 				{
 					pAd->RaCfgObj.ExtEEPROMSize = 0;
-					printk("upload_profile Error : External EEPROM File size(%d) > MAX_EXT_EEPROM_SIZE(%d)\n", (fpE2pEnd - fpE2pStart), MAX_EXT_EEPROM_SIZE);
+					printk("upload_profile Error : External EEPROM File size(%d) > MAX_EXT_EEPROM_SIZE(%d)\n", pE2p->fw->size, MAX_EXT_EEPROM_SIZE);
 				}
 				else
 				{
-					pAd->RaCfgObj.ExtEEPROMSize = fpE2pEnd - fpE2pStart;
-					fpE2pStart = fpE2p->f_op->llseek(fpE2p, 0, SEEK_SET);
+					pAd->RaCfgObj.ExtEEPROMSize = pE2p->fw->size;
 				}
 			}
 		}
@@ -1856,40 +1832,54 @@ int _append_extra_profile2(iNIC_PRIVATE *pAd, int len)
 
 static void _upload_profile(iNIC_PRIVATE *pAd)
 {
-	int len = 0,extra = 0, e2pLen = 0;
-	struct file *fp = pAd->RaCfgObj.profile.fp;
-	struct file *fpE2p = pAd->RaCfgObj.ext_eeprom.fp;
+	int len = 0, extra = 0, e2pLen = 0, room_left = MAX_FEEDBACK_LEN;
+	loff_t rest = 0;
+	FWHandle *pProfile = &pAd->RaCfgObj.profile;
+	FWHandle *pE2p = &pAd->RaCfgObj.ext_eeprom;
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	int len2 = 0;	
-	struct file *fp2 = NULL;
+	FWHandle *pProfile2 = NULL;
 	static unsigned char bStartSecondProfile = FALSE;
 	int i;
 
 	pAd = gAdapter[0];
-	fp = ConcurrentObj.Profile[0].fp;
-	fp2 = ConcurrentObj.Profile[1].fp;	
+	pProfile = &ConcurrentObj.Profile[0];
+	pProfile2 = &ConcurrentObj.Profile[1];
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 	
 
-	if (!fp) return;
+	if (!pProfile) return;
 
 	memset(pAd->RaCfgObj.test_pool, 0, MAX_FEEDBACK_LEN);
 	//len = read(cfg_fd, RaCfgObj.test_pool, MAX_FEEDBACK_LEN);
-	len = fp->f_op->read(fp, pAd->RaCfgObj.test_pool, MAX_FEEDBACK_LEN, &fp->f_pos);
+	if(pProfile->r_off < pProfile->fw->size){
+		rest = pProfile->fw->size - pProfile->r_off;
+		len = rest <= room_left ? rest : room_left;
+		memcpy(pAd->RaCfgObj.test_pool, &pProfile->fw->data[pProfile->r_off], len);
+		pProfile->r_off += rest;
+		room_left -= len;
+	}
 	extra = _append_extra_profile(pAd, len);
 	len += extra;
-
+	room_left -= extra;
 
 #ifndef CONFIG_CONCURRENT_INIC_SUPPORT
 	if (pAd->RaCfgObj.bExtEEPROM && len < MAX_FEEDBACK_LEN)
 	{
-		if (!fpE2p)
+		if (!pE2p.fw)
 		{
 			printk("upload_profile Error : Can't read External EEPROM File\n");
 			return;
 		}
-		e2pLen = fpE2p->f_op->read(fpE2p, pAd->RaCfgObj.test_pool + len, MAX_FEEDBACK_LEN - len, &fpE2p->f_pos);        
-		len += e2pLen;  
+
+		if(pE2p->r_off < pE2p->fw->size){
+			rest = pE2p->fw->size - pE2p->r_off;
+			e2pLen = rest <= room_left ? rest : room_left;
+			memcpy(pAd->RaCfgObj.test_pool+len, &pProfile->fw->data[pE2p->r_off], e2pLen);
+			pE2p->r_off += rest;
+		}
+		len += e2pLen;
+		room_left -= e2pLen;
 	}
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT // 	
 
@@ -1903,30 +1893,43 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 			bStartSecondProfile = TRUE;
 			pAd->RaCfgObj.test_pool[len] ='\n';
 			len++;
-		}				
-		len2 = fp2->f_op->read(fp2, pAd->RaCfgObj.test_pool + len, MAX_FEEDBACK_LEN - len, &fp2->f_pos);
+			room_left--;
+		}
+		if(pProfile2->r_off < pProfile2->fw->size){
+			rest = pProfile2->fw->size - pProfile2->r_off;
+			len2 = rest <= room_left ? rest : room_left;
+			memcpy(pAd->RaCfgObj.test_pool+len, &pProfile->fw->data[pE2p->r_off], len2);
+			pE2p->r_off += rest;
+		}
 	}
 	len += len2;
-
+	room_left -= len2;
 	/* upload attributes of the 2nd card and null string terminator */
 	extra = _append_extra_profile2(gAdapter[1], len);
 	len += extra;
+	room_left -= extra;
 
 	/* upload both external EEPROM data */
 	for(i = 0; i < CONCURRENT_CARD_NUM; i++)
 	{
-		fpE2p = ConcurrentObj.ExtEeprom[i].fp;
-		
+		pE2p = &ConcurrentObj.ExtEeprom[i];
+
 		if (gAdapter[i]->RaCfgObj.bExtEEPROM && len < MAX_FEEDBACK_LEN)
-	{
-		if (!fpE2p)
 		{
-			printk("upload_profile Error : Can't read External EEPROM File\n");
-			return;
+			if (!pE2p->fw)
+			{
+				printk("upload_profile Error : Can't read External EEPROM File\n");
+				return;
+			}
+			if(pE2p->r_off < pE2p->fw->size){
+				rest = pE2p->fw->size - pE2p->r_off;
+				e2pLen = rest <= room_left ? rest : room_left;
+				memcpy(pAd->RaCfgObj.test_pool+len, &pProfile->fw->data[pE2p->r_off], e2pLen);
+				pE2p->r_off += rest;
+			}
+			len += e2pLen;
 		}
-		e2pLen = fpE2p->f_op->read(fpE2p, pAd->RaCfgObj.test_pool + len, MAX_FEEDBACK_LEN - len, &fpE2p->f_pos);        
-		len += e2pLen;  
-	}
+		room_left -= e2pLen;
 	}	
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
@@ -2052,35 +2055,26 @@ static void RaCfgConcurrentOpenAction(void *arg)
 	// Reset files to avoid duplicated profile upload 
 	// when multiple BOOT_NOTIFY coming too fast.
 	RaCfgCloseFile(pAd, &pAd->RaCfgObj.firmware);
+
 	RaCfgOpenFile(pAd, &pAd->RaCfgObj.firmware, O_RDONLY);
 	pAd->RaCfgObj.extraProfileOffset = 0;
 
-	if (IS_ERR(pAd->RaCfgObj.firmware.fp))
+	if (!pAd->RaCfgObj.firmware.fw)
 	{
-		DBGPRINT("--> Error %ld opening %s\n", -PTR_ERR(pAd->RaCfgObj.firmware.fp),pAd->RaCfgObj.firmware.name);
+		DBGPRINT("--> Error %ld opening %s\n", -PTR_ERR(pAd->RaCfgObj.firmware.fw), pAd->RaCfgObj.firmware.name);
 		return;
 	}  
 
 	for(i = 0; i < CONCURRENT_CARD_NUM; i++)
 	{
 		RaCfgCloseFile(pAd, &ConcurrentObj.Profile[i]);
-		RaCfgOpenFile(pAd, &ConcurrentObj.Profile[i],  O_RDONLY);
-
-		if (IS_ERR(ConcurrentObj.Profile[i].fp))
-		{
-			DBGPRINT("--> Error %ld opening %s\n", -PTR_ERR(ConcurrentObj.Profile[i].fp),ConcurrentObj.Profile[i].name);
+		if( !RaCfgOpenFile(pAd, &ConcurrentObj.Profile[i],  O_RDONLY))
 			return;
-		}
-
 		if (gAdapter[i]->RaCfgObj.bExtEEPROM)
 		{
 			RaCfgCloseFile(gAdapter[i], &ConcurrentObj.ExtEeprom[i]);
-			RaCfgOpenFile(gAdapter[i], &ConcurrentObj.ExtEeprom[i],  O_RDONLY);
-			if (IS_ERR(ConcurrentObj.ExtEeprom[i].fp))
-			{
-				DBGPRINT("--> Error %ld opening %s\n", -PTR_ERR(ConcurrentObj.ExtEeprom[i].fp),ConcurrentObj.ExtEeprom[i].name);
+			if( !RaCfgOpenFile(gAdapter[i], &ConcurrentObj.ExtEeprom[i],  O_RDONLY))
 				return;
-			}
 			gAdapter[i]->RaCfgObj.bGetExtEEPROMSize = 0;        
 		}		
 	}
@@ -2765,15 +2759,15 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 #else
 #if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
 #ifdef PHASE_LOAD_CODE
-		    if (pAd->RaCfgObj.bLoadPhase)
-		    {
+//		    if (pAd->RaCfgObj.bLoadPhase)
+//		    {
 			    pAd->RaCfgObj.dropNotifyCount++;
 			    if (pAd->RaCfgObj.dropNotifyCount <= MAX_NOTIFY_DROP_NUMBER)
 			    {
 			    	kfree_skb(skb);
 			    	break;
 			    }	
-		    }
+//		    }
             pAd->RaCfgObj.dropNotifyCount = 0;
 #endif
 #endif
@@ -3693,10 +3687,10 @@ void RaCfgInterfaceClose(iNIC_PRIVATE *pAd)
 #ifdef MULTIPLE_CARD_SUPPORT
 
 extern int profile_get_keyparameter(
-								   char *   key,
+								   const char *   key,
 								   char *   dest,   
 								   int     destsize,
-								   char *   buffer);
+								   const char *   buffer);
 
 
 boolean CardInfoRead(
@@ -3917,62 +3911,31 @@ boolean CardInfoRead(
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 
 extern int profile_get_keyparameter(
-								   char *   key,
+								   const char *   key,
 								   char *   dest,   
 								   int     destsize,
-								   char *   buffer);
+								   const char *   buffer);
 
-boolean ConcurrentCardInfoRead(void)
+void ConcurrentCardInfoRead(void)
 {
-
-	struct file *srcf;
-	s32 retval;
-	kuid_t orgfsuid;
-	kgid_t orgfsgid;
-	mm_segment_t orgfs;
-	s8 *buffer, *tmpbuf, search_buf[30];
-	boolean flg_match_ok = FALSE;
-	s8 card_info_path[256];
-	int card_idx;
-	int i;
-	struct cred *override_cred, *old_cred;
-	// init 
+	char *tmpbuf, search_buf[30];
+	int i, card_idx;
+	const struct firmware *fw;
+	char *pf_name;
 
 	for(i = 0;i < CONCURRENT_CARD_NUM; i++)
 		RLK_STRCPY(ConcurrentObj.Mac[i],"");
 
-	buffer = kmalloc(MAX_INI_BUFFER_SIZE, MEM_ALLOC_FLAG);
-	if (buffer == NULL)
-		return FALSE;
-
-	tmpbuf = kmalloc(MAX_PARAM_BUFFER_SIZE, MEM_ALLOC_FLAG);
-	if (tmpbuf == NULL)
-	{
-		kfree(buffer);
-		return NDIS_STATUS_FAILURE;
-	}
-	orgfsuid = current_fsuid();
-	orgfsgid = current_fsgid();
-	override_cred = prepare_creds();
-	if (!override_cred)
-		return -ENOMEM;
-	override_cred->fsuid = GLOBAL_ROOT_UID;
-	override_cred->fsgid = GLOBAL_ROOT_GID;
-	old_cred = (struct cred *)override_creds(override_cred);
-	orgfs = get_fs();
-	set_fs(KERNEL_DS);
-
-
 	// Open card information file and Set card default dat file path 
 	if (strcmp(mode, "sta") == 0)
 	{
-		RLK_STRCPY(card_info_path, STA_CARD_INFO);
+		pf_name = STA_CARD_INFO;
 		RLK_STRCPY(ConcurrentObj.Profile[0].read_name, STA_PROFILE);
 		RLK_STRCPY(ConcurrentObj.Profile[1].read_name, STA_CONCURRENT_PROFILE);
 	}
 	else
 	{
-		RLK_STRCPY(card_info_path, AP_CARD_INFO);
+		pf_name = AP_CARD_INFO;
 		RLK_STRCPY(ConcurrentObj.Profile[0].read_name, AP_PROFILE);
 		RLK_STRCPY(ConcurrentObj.Profile[1].read_name, AP_CONCURRENT_PROFILE);
 	}
@@ -3980,84 +3943,62 @@ boolean ConcurrentCardInfoRead(void)
 	RLK_STRCPY(ConcurrentObj.ExtEeprom[0].read_name, EEPROM_BIN);
 	RLK_STRCPY(ConcurrentObj.ExtEeprom[1].read_name, CONCURRENT_EEPROM_BIN);
 
-
-#ifdef DBG
-	snprintf(buffer, sizeof(buffer), "%s%s", root, card_info_path);
-	RLK_STRCPY(card_info_path, buffer);
-#endif
-	// TODO : Convert to request_firmware
-	srcf = filp_open(card_info_path, O_RDONLY, 0);
-	if (IS_ERR(srcf))
+	// TODO : add card profile read
+	goto err_exit;
+#if 0
+	tmpbuf = kcalloc(MAX_PARAM_BUFFER_SIZE, 1, MEM_ALLOC_FLAG);
+	if (tmpbuf == NULL)
 	{
-		/* card information file does not exist */
-		DBGPRINT("No card information file.\nUse default profile path.\n");
-		return FALSE;
-	}
-	else
-	{
-		DBGPRINT("Open %s to set profile path\n", card_info_path);		
+		dev_err(&pAd->dev->dev, "failed to allocate buffer\n");
+		goto err_exit;
 	}
 
+	if (0 != request_firmware(&fw, pf_name, &pAd->dev->dev)) {
+		dev_err(&pAd->dev->dev, "failed to load profile: %s\n", pf_name);
+		goto err_exit;
+	}
 
-	if (srcf->f_op && srcf->f_op->read)
+	/* get card selection method */
+	for(card_idx = 0; card_idx < CONCURRENT_CARD_NUM; card_idx++)
 	{
-		/* card information file exists so reading the card information */
-		memset(buffer, 0x00, MAX_INI_BUFFER_SIZE);
-		retval = srcf->f_op->read(srcf, buffer, MAX_INI_BUFFER_SIZE, &srcf->f_pos);
-		if (retval < 0)
+		// read card file path
+		snprintf(search_buf, sizeof(search_buf), "%02dProfilePath", card_idx);
+		if (profile_get_keyparameter(search_buf, tmpbuf, 256, fw->data))
 		{
-			/* read fail */
-			DBGPRINT("--> Read %s error %d.\n Use default profile path.\n", card_info_path, -retval);
+			if (strlen(tmpbuf) < sizeof(ConcurrentObj.Profile[card_idx].read_name))
+			{
+				// backup card file path
+				memmove(ConcurrentObj.Profile[card_idx].read_name, tmpbuf , strlen(tmpbuf));
+				ConcurrentObj.Profile[card_idx].read_name[strlen(tmpbuf)] = '\0';
+
+
+				DBGPRINT("Card Profile Name[%d] = %s\n", card_idx, ConcurrentObj.Profile[card_idx].read_name);
+			}
+			else
+			{
+				DBGPRINT("Card Profile Name[%d] length too large!\n", card_idx);
+			}
 		}
 		else
 		{
-			/* get card selection method */
-			memset(tmpbuf, 0x00, MAX_PARAM_BUFFER_SIZE);
-			
-
-			for(card_idx = 0; card_idx < CONCURRENT_CARD_NUM; card_idx++)
-			{
-				// read card file path
-				snprintf(search_buf, sizeof(search_buf), "%02dProfilePath", card_idx);
-				if (profile_get_keyparameter(search_buf, tmpbuf, 256, buffer))
-				{
-					if (strlen(tmpbuf) < sizeof(ConcurrentObj.Profile[card_idx].read_name))
-					{
-						// backup card file path
-						memmove(ConcurrentObj.Profile[card_idx].read_name, tmpbuf , strlen(tmpbuf));
-						ConcurrentObj.Profile[card_idx].read_name[strlen(tmpbuf)] = '\0';
-
-							
-						DBGPRINT("Card Profile Name[%d] = %s\n", card_idx, ConcurrentObj.Profile[card_idx].read_name);
-					}
-					else
-					{
-						DBGPRINT("Card Profile Name[%d] length too large!\n", card_idx);
-					}					
-				}
-				else
-				{
-					DBGPRINT("Can not find search key word in card.dat!\n");
-				}
-				// read MAC address
-				snprintf(search_buf, sizeof(search_buf), "%02dMAC", card_idx);
-				if (profile_get_keyparameter(search_buf, tmpbuf, 256, buffer))
-				{
-					RLK_STRCPY(ConcurrentObj.Mac[card_idx], tmpbuf);
-					DBGPRINT("%02dCard MAC address = %s\n", card_idx, tmpbuf);
-				}				
-			}
+			DBGPRINT("Can not find search key word in card.dat!\n");
+		}
+		// read MAC address
+		snprintf(search_buf, sizeof(search_buf), "%02dMAC", card_idx);
+		if (profile_get_keyparameter(search_buf, tmpbuf, 256, fw->data))
+		{
+			RLK_STRCPY(ConcurrentObj.Mac[card_idx], tmpbuf);
+			DBGPRINT("%02dCard MAC address = %s\n", card_idx, tmpbuf);
 		}
 	}
-	
-	// close file
-	retval = filp_close(srcf, NULL);
-	set_fs(orgfs);
-	revert_creds(old_cred);
-	put_cred(override_cred);
-	kfree(buffer);
-	kfree(tmpbuf);
-	return flg_match_ok;
+
+	return;
+#endif
+	err_exit:
+	DBGPRINT("Use default profile path.\n");
+//	kfree(tmpbuf);
+//	release_firmware(fw);
+	return;
 }
 
 

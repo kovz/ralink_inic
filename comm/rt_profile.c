@@ -189,7 +189,7 @@ static char * rstrtok(char * s,const char * ct)
 		Others                      Success
 	========================================================================
 */
-static unsigned char *  profile_find_section(char  *buffer)
+static unsigned char *  profile_find_section(const char  *buffer)
 {
 	char temp_buf[32];
 	unsigned char *  ptr;
@@ -223,10 +223,10 @@ static unsigned char *  profile_find_section(char  *buffer)
 	========================================================================
 */
 int profile_get_keyparameter(
-							char *   key,
+							const char *   key,
 							char *   dest,   
 							int     destsize,
-							char *   buffer)
+							const char *   buffer)
 {
 	unsigned char *temp_buf1 = NULL;
 	unsigned char *temp_buf2 = NULL;
@@ -316,26 +316,20 @@ int profile_get_keyparameter(
 	return TRUE;
 }
 
-boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
+void rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 {
-	bool                     retval = TRUE;
-	char                    *buffer;
 	char                    *tmpbuf;
 	unsigned char           *macptr;                            
 	int                     i=0;
 
 	const struct firmware *fw;
-	const char *pf_name;
-
-	buffer = kcalloc(MAX_INI_BUFFER_SIZE, 1, MEM_ALLOC_FLAG);
-	if (buffer == NULL)
-		return FALSE;
+	char *pf_name;
 
 	tmpbuf = kcalloc(MAX_PARAM_BUFFER_SIZE, 1, MEM_ALLOC_FLAG);
 	if (tmpbuf == NULL)
 	{
-		kfree(buffer);
-		return FALSE;
+		dev_err(&pAd->dev->dev, "fail allocate buffer\n");
+		return;
 	}
 
 #ifdef MULTIPLE_CARD_SUPPORT
@@ -358,15 +352,14 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 			pf_name	= STA_PROFILE;
 	}
 
-	if (request_firmware_into_buf(&fw, pf_name, &pAd->dev->dev, buffer, MAX_INI_BUFFER_SIZE)) {
+	if (0 != request_firmware(&fw, pf_name, &pAd->dev->dev)) {
 		dev_err(&pAd->dev->dev, "failed to load profile: %s\n", pf_name);
-		retval = FALSE;
 		goto exit;
 	}
 	if (pAd->RaCfgObj.opmode)
 	{
 		// BssidNum; This must read first of other multiSSID field, so list this field first in configuration file
-		if (profile_get_keyparameter("BssidNum", tmpbuf, 25, buffer))
+		if (profile_get_keyparameter("BssidNum", tmpbuf, 25, fw->data))
 		{
 			pAd->RaCfgObj.BssidNum = (unsigned char) simple_strtol(tmpbuf, 0, 10);
 			if (pAd->RaCfgObj.BssidNum > MAX_MBSSID_NUM)
@@ -380,7 +373,7 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 			}
 		}
 		// VLAN_ID
-		if (profile_get_keyparameter("VLAN_ID", tmpbuf, 256, buffer))
+		if (profile_get_keyparameter("VLAN_ID", tmpbuf, 256, fw->data))
 		{
 			for (i=0, macptr = rstrtok(tmpbuf,";"); macptr; macptr = rstrtok(NULL,";"), i++)
 			{
@@ -395,7 +388,7 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 		}
 
 		// VLAN_TAG
-		if (profile_get_keyparameter("VLAN_TAG", tmpbuf, 256, buffer))
+		if (profile_get_keyparameter("VLAN_TAG", tmpbuf, 256, fw->data))
 		{
 			for (i=0, macptr = rstrtok(tmpbuf,";"); macptr; macptr = rstrtok(NULL,";"), i++)
 			{
@@ -410,14 +403,14 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 		}
 
 		// WDS
-		if (profile_get_keyparameter("WdsEnable", tmpbuf, 10, buffer))
+		if (profile_get_keyparameter("WdsEnable", tmpbuf, 10, fw->data))
 		{
 
 			pAd->RaCfgObj.bWds = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
 		}
 
 		// APCLI
-		if (profile_get_keyparameter("ApCliEnable", tmpbuf, 10, buffer))
+		if (profile_get_keyparameter("ApCliEnable", tmpbuf, 10, fw->data))
 		{
 
 			pAd->RaCfgObj.bApcli = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
@@ -425,7 +418,7 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 	}
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	// Concurrent Related
-	if (profile_get_keyparameter("DisableRadio", tmpbuf, 10, buffer))
+	if (profile_get_keyparameter("DisableRadio", tmpbuf, 10, fw->data))
 	{
 		pAd->RaCfgObj.bRadioOff = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
 	}
@@ -438,7 +431,7 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 		pAd->RaCfgObj.bMesh = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
 	}
 #endif // MESH_SUPPORT //					
-	if (profile_get_keyparameter("ExtEEPROM", tmpbuf, 10, buffer))
+	if (profile_get_keyparameter("ExtEEPROM", tmpbuf, 10, fw->data))
 	{
 		pAd->RaCfgObj.bExtEEPROM = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
 	}
@@ -462,14 +455,12 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
 	// For locally administered address
-	if (profile_get_keyparameter("LocalAdminAddr", tmpbuf, 10, buffer))
+	if (profile_get_keyparameter("LocalAdminAddr", tmpbuf, 10, fw->data))
 	{
 		pAd->RaCfgObj.bLocalAdminAddr = (unsigned char) simple_strtol(tmpbuf, 0, 10) > 0 ? TRUE : FALSE;
 	}
 #endif
 exit:
-	kfree(buffer);
 	kfree(tmpbuf);
-
-	return retval;
+	release_firmware(fw);
 }

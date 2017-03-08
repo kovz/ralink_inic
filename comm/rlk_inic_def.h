@@ -59,8 +59,8 @@
 
 #if defined(MULTIPLE_CARD_SUPPORT) || defined(CONFIG_CONCURRENT_INIC_SUPPORT)
 
-#define STA_CARD_INFO			"iNIC_sta_card.dat"
-#define AP_CARD_INFO			"iNIC_ap_card.dat"
+#define STA_CARD_INFO			FIRMWARE_PATH "iNIC_sta_card.dat"
+#define AP_CARD_INFO			FIRMWARE_PATH "iNIC_ap_card.dat"
 // MC: Multple Cards
 #define MAX_NUM_OF_MULTIPLE_CARD		32
 
@@ -244,12 +244,13 @@ typedef struct m_file_handle
  	char read_name[MAX_FILE_NAME_SIZE];
  #endif // MULTIPLE_CARD_SUPPORT || CONFIG_CONCURRENT_INIC_SUPPORT
 
- 	struct file *fp;
+ 	const struct firmware *fw;
  	int  seq;
-     u32  crc;
-     CRC_HEADER hdr;
-     unsigned char hdr_src[CRC_HEADER_LEN];
- } FileHandle;
+    u32  crc;
+    CRC_HEADER hdr;
+    unsigned char hdr_src[CRC_HEADER_LEN];
+    loff_t r_off;
+ } FWHandle;
 
 typedef unsigned char   boolean;
 
@@ -344,7 +345,7 @@ typedef struct __RACFG_OBJECT
 
 	u8                          packet[1536];
 	u8                          wsc_updated_profile[MAX_PROFILE_SIZE];
-	FileHandle                  firmware, profile, ext_eeprom;
+	FWHandle                  	firmware, profile, ext_eeprom;
 	boolean               		bGetExtEEPROMSize;			 // for upload profile
 	boolean               		bExtEEPROM;					 // enable external eeprom not
 	unsigned int 				ExtEEPROMSize;				 // for external eeprom
@@ -403,8 +404,8 @@ typedef struct __CONCURRENT_OBJECT
 {
 u8 			CardCount;
 char 		Mac[CONCURRENT_CARD_NUM][64];
-FileHandle	Profile[CONCURRENT_CARD_NUM];
-FileHandle	ExtEeprom[CONCURRENT_CARD_NUM];
+FWHandle	Profile[CONCURRENT_CARD_NUM];
+FWHandle	ExtEeprom[CONCURRENT_CARD_NUM];
 int			extraProfileOffset2;
 }CONCURRENT_OBJECT;
 
