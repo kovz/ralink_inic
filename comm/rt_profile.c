@@ -326,8 +326,7 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 
 	const struct firmware *fw;
 	const char *pf_name;
-	pAd->RaCfgObj.BssidNum = 2;
-	return TRUE;
+
 	buffer = kcalloc(MAX_INI_BUFFER_SIZE, 1, MEM_ALLOC_FLAG);
 	if (buffer == NULL)
 		return FALSE;
@@ -354,9 +353,9 @@ boolean rlk_inic_read_profile(iNIC_PRIVATE *pAd)
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 	{
 		if (pAd->RaCfgObj.opmode)
-			pf_name = INIC_AP_PROFILE_PATH;
+			pf_name = AP_PROFILE;
 		else
-			pf_name	= INIC_STA_PROFILE_PATH;
+			pf_name	= STA_PROFILE;
 	}
 
 	if (request_firmware_into_buf(&fw, pf_name, &pAd->dev->dev, buffer, MAX_INI_BUFFER_SIZE)) {

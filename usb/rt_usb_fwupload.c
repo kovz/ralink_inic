@@ -498,15 +498,15 @@ void fw_upgrade_to_dev(iNIC_PRIVATE *pAd)
 	//hex_dump("start fw_upgrade_to_dev", usb_ep0_pData, 64);
 	if (!pAd->RaCfgObj.opmode == 0)
 	{
-		RLK_STRCPY(pAd->RaCfgObj.firmware.name, INIC_AP_FIRMWARE_PATH);
-		RLK_STRCPY(pAd->RaCfgObj.profile.name,  INIC_AP_PROFILE_PATH);
-		RLK_STRCPY(pAd->RaCfgObj.ext_eeprom.name,  EEPROM_BIN_FILE_PATH);
+		RLK_STRCPY(pAd->RaCfgObj.firmware.name, AP_FIRMWARE);
+		RLK_STRCPY(pAd->RaCfgObj.profile.name,  AP_PROFILE);
+		RLK_STRCPY(pAd->RaCfgObj.ext_eeprom.name,  EEPROM_BIN);
 	}
 	else
 	{
-		RLK_STRCPY(pAd->RaCfgObj.firmware.name, INIC_STA_FIRMWARE_PATH);
-		RLK_STRCPY(pAd->RaCfgObj.profile.name,  INIC_STA_PROFILE_PATH);
-		RLK_STRCPY(pAd->RaCfgObj.ext_eeprom.name,  EEPROM_BIN_FILE_PATH);
+		RLK_STRCPY(pAd->RaCfgObj.firmware.name, STA_FIRMWARE);
+		RLK_STRCPY(pAd->RaCfgObj.profile.name,  STA_PROFILE);
+		RLK_STRCPY(pAd->RaCfgObj.ext_eeprom.name,  EEPROM_BIN);
 	}
 
 

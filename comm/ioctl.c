@@ -194,7 +194,7 @@ int Set_ATE_Load_E2P_Wrapper(
 
 	DBGPRINT("===> %s\n", __FUNCTION__);
 
-	src = (unsigned char *) EEPROM_BIN_FILE_PATH;
+	src = (unsigned char *) EEPROM_BIN;
 
 	/* zero the e2p buffer */
 	memset(WriteEEPROM, 0x00, EEPROM_SIZE);

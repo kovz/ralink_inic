@@ -175,7 +175,7 @@ static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	DispatchAdapter(&pAd, skb);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-	DBGPRINT("skb: skb->pkt_type %x, pAd %x, skb->dev %x, pAd->dev %x\n", skb->pkt_type, pAd, skb->dev, pAd->master);
+//	DBGPRINT("skb: skb->pkt_type %x, pAd %x, skb->dev %x, pAd->dev %x\n", skb->pkt_type, pAd, skb->dev, pAd->master);
 
 	if (skb->pkt_type == PACKET_OUTGOING || pAd == NULL
 			|| pAd->master != skb->dev) {
@@ -185,7 +185,6 @@ static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
 
 	if (racfg_frame_handle(pAd, skb)) {
 		/* no need to call kfree_skb(), racfg_frame_handle() already does it itself */
-		printk("%s <---\n", __FUNCTION__);
 		return 0;
 	}
 

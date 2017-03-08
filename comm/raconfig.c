@@ -651,21 +651,21 @@ void RaCfgSetUp(iNIC_PRIVATE *pAd, struct net_device *dev)
 			pAd->RaCfgObj.MBSSID[i].vlan_id = 0;
 		}
 	}
-	
-#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-	/* After the first time opening, read all profile to setting attribute*/
-	if(ConcurrentObj.CardCount == 0)
-	{
-		for(i=0; i<CONCURRENT_CARD_NUM; i++)
-		{
-			printk("Read profile[%d]\n", i);
-			rlk_inic_read_profile(gAdapter[i]);		
-		}
-	}
-#else
+	// TODO : bug in read second profile gAdapter[1] non initialized
+//#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
+//	/* After the first time opening, read all profile to setting attribute*/
+//	if(ConcurrentObj.CardCount == 0)
+//	{
+//		for(i=0; i<CONCURRENT_CARD_NUM; i++)
+//		{
+//			printk("Read profile[%d]\n", i);
+//			rlk_inic_read_profile(gAdapter[i]);
+//		}
+//	}
+//#else
+//	rlk_inic_read_profile(pAd);
+//#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 	rlk_inic_read_profile(pAd);
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-
 	if (pAd->RaCfgObj.opmode)
 	{
 		if (pAd->RaCfgObj.bApcli && ((pAd->RaCfgObj.BssidNum+1) > MAX_MBSSID_NUM))
@@ -847,12 +847,17 @@ static int RaCfgBacklogThread(void *arg)
 	while (!kthread_should_stop()
 			&& !signal_pending(current))
 	{
-		if(kfifo_is_empty(&pAd->RaCfgObj.backlog_fifo))
-			rc = wait_event_interruptible(pAd->RaCfgObj.backlogQH, !kfifo_is_empty(&pAd->RaCfgObj.backlog_fifo));
-		if(rc)
+		rc = wait_event_interruptible_timeout(pAd->RaCfgObj.backlogQH, !kfifo_is_empty(&pAd->RaCfgObj.backlog_fifo), HZ/10);
+		if(rc == -ERESTARTSYS)
+			break;
+		else if(rc ==0){
+//			DBGPRINT("Back Log FIFO is empty");
 			continue;
-		if(!kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task))
+		}
+		if(!kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task)){
+			DBGPRINT("Unexpected empty backlog_fifo");
 			continue;
+		}
 		if(curr_task.func)
 			curr_task.func(curr_task.arg);
 	}
@@ -878,12 +883,16 @@ static int RaCfgTaskThread(void *arg)
 
 	while (!kthread_should_stop() && !signal_pending(current))
 	{
-		if(kfifo_is_empty(&pAd->RaCfgObj.task_fifo))
-			rc = wait_event_interruptible(pAd->RaCfgObj.taskQH, !kfifo_is_empty(&pAd->RaCfgObj.task_fifo));
-		if(rc)
+		rc = wait_event_interruptible_timeout(pAd->RaCfgObj.taskQH, !kfifo_is_empty(&pAd->RaCfgObj.task_fifo), HZ/10);
+		if(rc == -ERESTARTSYS) break;
+		else if(rc ==0){
+//			DBGPRINT("Task FIFO is empty");
 			continue;
-		if(!kfifo_get(&pAd->RaCfgObj.task_fifo, &curr_task))
+		}
+		if(!kfifo_get(&pAd->RaCfgObj.task_fifo, &curr_task)){
+			DBGPRINT("Unexpected empty task_fifo");
 			continue;
+		}
 		if(curr_task.func){
 			curr_task.func(curr_task.arg);
 			continue;
@@ -1996,45 +2005,49 @@ static void RaCfgConcurrentOpenAction(void *arg)
 
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg;
 	int i;
-
-	pAd = gAdapter[0];
-
-	if (!pAd->RaCfgObj.opmode == 0)
+	
+	// TODO : Firmware loads only for first adapter
+	
+	if (pAd->RaCfgObj.opmode == 0)
 	{
-		RLK_STRCPY(pAd->RaCfgObj.firmware.name, INIC_AP_FIRMWARE_PATH);
+		RLK_STRCPY(pAd->RaCfgObj.firmware.name, STA_FIRMWARE);
 	}
 	else
 	{
-		RLK_STRCPY(pAd->RaCfgObj.firmware.name, INIC_STA_FIRMWARE_PATH);
+		RLK_STRCPY(pAd->RaCfgObj.firmware.name, AP_FIRMWARE);
 	}
+	DBGPRINT("Firmware path %s\n", pAd->RaCfgObj.firmware.name);
+
 
 	for(i = 0; i < CONCURRENT_CARD_NUM; i++)
 	{
-		RLK_STRCPY(ConcurrentObj.Profile[i].name, ConcurrentObj.Profile[i].read_name);	
-		RLK_STRCPY(ConcurrentObj.ExtEeprom[i].name, ConcurrentObj.ExtEeprom[i].read_name);		
+		RLK_STRCPY(ConcurrentObj.Profile[i].name, ConcurrentObj.Profile[i].read_name);
+		DBGPRINT("Profile[%i] path %s, read path %s\n", i, ConcurrentObj.Profile[i].name, ConcurrentObj.Profile[i].read_name);
+		RLK_STRCPY(ConcurrentObj.ExtEeprom[i].name, ConcurrentObj.ExtEeprom[i].read_name);
+		DBGPRINT("EEPROM[%i] path %s, read path %s\n", i, ConcurrentObj.ExtEeprom[i].name, ConcurrentObj.ExtEeprom[i].read_name);
 	}
 
-#ifdef DBG
-	{		
-		char buf[MAX_FILE_NAME_SIZE]; 
-		
-		sprintf(buf, "%s%s", root, pAd->RaCfgObj.firmware.name);
-		RLK_STRCPY(pAd->RaCfgObj.firmware.name, buf);
-
-		for(i = 0; i < CONCURRENT_CARD_NUM; i++)
-		{
-			snprintf(buf, sizeof(buf), "%s%s", root, ConcurrentObj.Profile[i].name);
-			RLK_STRCPY(ConcurrentObj.Profile[i].name, buf);
-
-			if (gAdapter[i]->RaCfgObj.bExtEEPROM)
-			{
-				snprintf(buf, sizeof(buf), "%s%s", root, ConcurrentObj.ExtEeprom[i].name);
-				RLK_STRCPY(ConcurrentObj.ExtEeprom[i].name, buf);
-			}
-		}
-	}
-
-#endif
+//#ifdef DBG
+//	{
+//		char buf[MAX_FILE_NAME_SIZE];
+//
+//		sprintf(buf, "%s%s", root, pAd->RaCfgObj.firmware.name);
+//		RLK_STRCPY(pAd->RaCfgObj.firmware.name, buf);
+//
+//		for(i = 0; i < CONCURRENT_CARD_NUM; i++)
+//		{
+//			snprintf(buf, sizeof(buf), "%s%s", root, ConcurrentObj.Profile[i].name);
+//			RLK_STRCPY(ConcurrentObj.Profile[i].name, buf);
+//
+//			if (gAdapter[i]->RaCfgObj.bExtEEPROM)
+//			{
+//				snprintf(buf, sizeof(buf), "%s%s", root, ConcurrentObj.ExtEeprom[i].name);
+//				RLK_STRCPY(ConcurrentObj.ExtEeprom[i].name, buf);
+//			}
+//		}
+//	}
+//
+//#endif
 
 	// Reset files to avoid duplicated profile upload 
 	// when multiple BOOT_NOTIFY coming too fast.
@@ -2351,52 +2364,50 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 		struct sk_buff *skb;
 		HndlTask curr_task;
 
-		if (!pAd->RaCfgObj.wait_completed)
-		{
-#ifdef CONFIG_PREEMPT
-			int atomic_wait =0;
-			DEFINE_WAIT(__wait);
-			while (in_atomic())
-			{
-				atomic_wait++;
-				prepare_to_wait(&pAd->RaCfgObj.waitQH, &__wait, TASK_INTERRUPTIBLE); 
-				if (pAd->RaCfgObj.wait_completed)
-				{
-					printk("wait atomic, count=%d\n", atomic_wait);
-					break;
-				}
-
-				//if (signal_pending(current))
-				//    break;
-
-			}
-			finish_wait(&pAd->RaCfgObj.waitQH, &__wait);
-
-			if (!atomic_wait)
-			{
-				wait_event_interruptible_timeout(pAd->RaCfgObj.waitQH, pAd->RaCfgObj.wait_completed, timeout);
-			}
-#else
-			wait_event_interruptible_timeout(pAd->RaCfgObj.waitQH, pAd->RaCfgObj.wait_completed, timeout);
-#endif
-		}
-		RTMP_SEM_LOCK(&pAd->RaCfgObj.waitLock);
-		if(kfifo_is_empty(&pAd->RaCfgObj.wait_fifo))
-		{
-			pAd->RaCfgObj.wait_completed = 0;
-			RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
+//		if (!pAd->RaCfgObj.wait_completed)
+//		{
+//#ifdef CONFIG_PREEMPT
+//			int atomic_wait =0;
+//			DEFINE_WAIT(__wait);
+//			while (in_atomic())
+//			{
+//				atomic_wait++;
+//				prepare_to_wait(&pAd->RaCfgObj.waitQH, &__wait, TASK_INTERRUPTIBLE);
+//				if (pAd->RaCfgObj.wait_completed)
+//				{
+//					printk("wait atomic, count=%d\n", atomic_wait);
+//					break;
+//				}
+//
+//				//if (signal_pending(current))
+//				//    break;
+//
+//			}
+//			finish_wait(&pAd->RaCfgObj.waitQH, &__wait);
+//
+//			if (!atomic_wait)
+//			{
+//				wait_event_interruptible_timeout(pAd->RaCfgObj.waitQH, pAd->RaCfgObj.wait_completed, timeout);
+//			}
+//#else
+		rc = wait_event_interruptible_timeout(pAd->RaCfgObj.waitQH, !kfifo_is_empty(&pAd->RaCfgObj.wait_fifo), timeout);
+//#endif
+//		}
+		if(rc == -ERESTARTSYS)
+			break;
+		else if(rc == 0){
+//			DBGPRINT("Back Log FIFO is empty");
 			printk("timeout(%d secs): cmd=%04x no response\n", secs, cmd);
 			status = -EFAULT;
 			return status;
 		}
+		RTMP_SEM_LOCK(&pAd->RaCfgObj.waitLock);
+		if(!kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task)){
+			DBGPRINT("Unexpected empty backlog_fifo");
+			RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
+			continue;
+		}
 
-		if(kfifo_is_empty(&pAd->RaCfgObj.wait_fifo))
-			rc = wait_event_interruptible(pAd->RaCfgObj.waitQH, !kfifo_is_empty(&pAd->RaCfgObj.wait_fifo));
-		if(rc)
-			continue;
-		if(!kfifo_get(&pAd->RaCfgObj.wait_fifo, &curr_task))
-			continue;
-		pAd->RaCfgObj.wait_completed--;
 		RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
 
 		if(curr_task.func)
@@ -2759,7 +2770,8 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			    pAd->RaCfgObj.dropNotifyCount++;
 			    if (pAd->RaCfgObj.dropNotifyCount <= MAX_NOTIFY_DROP_NUMBER)
 			    {
-				    break;			
+			    	kfree_skb(skb);
+			    	break;
 			    }	
 		    }
             pAd->RaCfgObj.dropNotifyCount = 0;
@@ -2773,7 +2785,8 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 				kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
 #endif
-		break;
+				kfree_skb(skb);
+			break;
 	case RACFG_CMD_BOOT_INITCFG:
 		DBGPRINT("RACFG_CMD_BOOT_INITCFG(%d)\n", seq);
 			if (!(box = GetArgBox()))
@@ -2934,7 +2947,10 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		if(((command_type&0x7FFF) == RACFG_CMD_TYPE_BOOTSTRAP)||
 				(((command_type&0x7FFF) == RACFG_CMD_TYPE_SYNC)&&(command_id == RACFG_CMD_GET_MAC)))
 		{
-			if((!gAdapter[0]->RaCfgObj.flg_is_open)&&!(gAdapter[1]->RaCfgObj.flg_is_open))
+			// TODO : early access to gAdapter[1]
+			//if((!gAdapter[0]->RaCfgObj.flg_is_open)&&!(gAdapter[1]->RaCfgObj.flg_is_open))
+			if((gAdapter[0] == NULL || gAdapter[1] == 0 ) ||
+					(!gAdapter[0]->RaCfgObj.flg_is_open && !gAdapter[1]->RaCfgObj.flg_is_open))
 			{
 				kfree_skb(skb);
 				return TRUE;
@@ -3950,26 +3966,26 @@ boolean ConcurrentCardInfoRead(void)
 	// Open card information file and Set card default dat file path 
 	if (strcmp(mode, "sta") == 0)
 	{
-		RLK_STRCPY(card_info_path, INIC_STA_CARD_INFO_PATH);
-		RLK_STRCPY(ConcurrentObj.Profile[0].read_name, INIC_STA_PROFILE_PATH);
-		RLK_STRCPY(ConcurrentObj.Profile[1].read_name, INIC_STA_CONCURRENT_PROFILE_PATH);		
+		RLK_STRCPY(card_info_path, STA_CARD_INFO);
+		RLK_STRCPY(ConcurrentObj.Profile[0].read_name, STA_PROFILE);
+		RLK_STRCPY(ConcurrentObj.Profile[1].read_name, STA_CONCURRENT_PROFILE);
 	}
 	else
 	{
-		RLK_STRCPY(card_info_path, INIC_AP_CARD_INFO_PATH);	
-		RLK_STRCPY(ConcurrentObj.Profile[0].read_name, INIC_AP_PROFILE_PATH);
-		RLK_STRCPY(ConcurrentObj.Profile[1].read_name, INIC_AP_CONCURRENT_PROFILE_PATH);
+		RLK_STRCPY(card_info_path, AP_CARD_INFO);
+		RLK_STRCPY(ConcurrentObj.Profile[0].read_name, AP_PROFILE);
+		RLK_STRCPY(ConcurrentObj.Profile[1].read_name, AP_CONCURRENT_PROFILE);
 	}
 
-	RLK_STRCPY(ConcurrentObj.ExtEeprom[0].read_name, EEPROM_BIN_FILE_PATH);		
-	RLK_STRCPY(ConcurrentObj.ExtEeprom[1].read_name, CONCURRENT_EEPROM_BIN_FILE_PATH);		
+	RLK_STRCPY(ConcurrentObj.ExtEeprom[0].read_name, EEPROM_BIN);
+	RLK_STRCPY(ConcurrentObj.ExtEeprom[1].read_name, CONCURRENT_EEPROM_BIN);
 
 
 #ifdef DBG
 	snprintf(buffer, sizeof(buffer), "%s%s", root, card_info_path);
 	RLK_STRCPY(card_info_path, buffer);
 #endif
-	
+	// TODO : Convert to request_firmware
 	srcf = filp_open(card_info_path, O_RDONLY, 0);
 	if (IS_ERR(srcf))
 	{
