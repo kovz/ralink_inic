@@ -2946,6 +2946,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			if((gAdapter[0] == NULL || gAdapter[1] == 0 ) ||
 					(!gAdapter[0]->RaCfgObj.flg_is_open && !gAdapter[1]->RaCfgObj.flg_is_open))
 			{
+				DBGPRINT("early access command id %x", command_id);
 				kfree_skb(skb);
 				return TRUE;
 			}				
@@ -3515,7 +3516,7 @@ static int netdev_event(
           iNIC_PRIVATE *rt = netdev_priv(dev);
 
             printk("NETDEV UP\n");
-            RaCfgEnqueueRestart(rt);
+            RaCfgFifoRestart(rt);
         }
 
         else

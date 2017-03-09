@@ -205,7 +205,7 @@ static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
 static struct packet_type in_band_packet_type = { .type = __constant_htons(
 		ETH_P_ALL), .func = in_band_rcv, };
 
-//#define DEBUG_HOOK 1
+#define DEBUG_HOOK 1
 #ifdef DEBUG_HOOK
 static int sniff_arp(struct sk_buff *skb, struct net_device *dev, \
                     struct packet_type *pt, struct net_device *orig_dev) {
@@ -563,9 +563,9 @@ static int __init rlk_inic_init(void) {
 		bridge = 1;
 	}
 #endif
-#ifdef NM_SUPPORT 
-	RaCfgSetUp(pAd, dev);
-#endif
+//#ifdef NM_SUPPORT
+//	RaCfgSetUp(pAd, dev);
+//#endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	dev2 = alloc_etherdev(sizeof(iNIC_PRIVATE));
@@ -627,6 +627,7 @@ static int __init rlk_inic_init(void) {
 	dev2->priv_flags = INT_MAIN;
 
 #ifdef NM_SUPPORT 
+	RaCfgSetUp(pAd, dev);
 	RaCfgSetUp(pAd2, dev2);
 #endif
 
