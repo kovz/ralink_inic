@@ -443,7 +443,7 @@ extern char *mac2;
 extern char *root;
 #endif
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
-//extern char *miimaster;
+extern char *miimaster;
 extern int syncmiimac;
 void IgmpTunnelRcvPkt(char *buff, int len, int src_port);
 int IgmpTunnelSendPkt(struct net_device *net_dev, char *buff, int len);

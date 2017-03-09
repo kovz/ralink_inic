@@ -205,7 +205,7 @@ static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
 static struct packet_type in_band_packet_type = { .type = __constant_htons(
 		ETH_P_ALL), .func = in_band_rcv, };
 
-#define DEBUG_HOOK 1
+//#define DEBUG_HOOK 1
 #ifdef DEBUG_HOOK
 static int sniff_arp(struct sk_buff *skb, struct net_device *dev, \
                     struct packet_type *pt, struct net_device *orig_dev) {
@@ -491,8 +491,9 @@ static int __init rlk_inic_init(void) {
 	pAd->dev = dev;
 	pAd->master = master;
 
+#ifdef NM_SUPPORT
 	pAd->hardware_reset = mii_hardware_reset;
-
+#endif
 	spin_lock_init(&pAd->lock);
 	dev->netdev_ops = &Netdev_Ops[0];
 
@@ -563,9 +564,9 @@ static int __init rlk_inic_init(void) {
 		bridge = 1;
 	}
 #endif
-//#ifdef NM_SUPPORT
-//	RaCfgSetUp(pAd, dev);
-//#endif
+#ifdef NM_SUPPORT
+	RaCfgSetUp(pAd, dev);
+#endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	dev2 = alloc_etherdev(sizeof(iNIC_PRIVATE));
@@ -584,12 +585,10 @@ static int __init rlk_inic_init(void) {
 
 	pAd2->dev = dev2;
 	pAd2->master = master;
+#ifdef NM_SUPPORT
 	pAd2->hardware_reset = NULL;
+#endif
 	spin_lock_init(&pAd2->lock);
-//	Netdev_Ops[1].ndo_open = mii_open;
-//	Netdev_Ops[1].ndo_stop = mii_close;
-//	Netdev_Ops[1].ndo_start_xmit = mii_send_packet;
-//	Netdev_Ops[1].ndo_do_ioctl = rlk_inic_ioctl;
 	dev2->netdev_ops = &Netdev_Ops[1];
 	for (i = 0; i < 32; i++) {
 		snprintf(name, sizeof(name), "%s01_%d", INIC_INFNAME, i);
@@ -627,7 +626,6 @@ static int __init rlk_inic_init(void) {
 	dev2->priv_flags = INT_MAIN;
 
 #ifdef NM_SUPPORT 
-	RaCfgSetUp(pAd, dev);
 	RaCfgSetUp(pAd2, dev2);
 #endif
 

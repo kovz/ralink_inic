@@ -243,12 +243,12 @@ typedef struct m_file_handle
  	/* read name form card file */
  	char read_name[MAX_FILE_NAME_SIZE];
  #endif // MULTIPLE_CARD_SUPPORT || CONFIG_CONCURRENT_INIC_SUPPORT
-
- 	const struct firmware *fw;
  	int  seq;
     u32  crc;
     CRC_HEADER hdr;
     unsigned char hdr_src[CRC_HEADER_LEN];
+    char * fw_data;
+    size_t size;
     loff_t r_off;
  } FWHandle;
 
