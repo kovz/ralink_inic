@@ -72,6 +72,7 @@ static int mii_send_packet(struct sk_buff *skb, struct net_device *dev);
 static struct net_device_stats *mii_get_stats(struct net_device *netdev);
 
 static int mii_hardware_reset(int op) {
+	DBGPRINT("-----> %s\n", __FUNCTION__);
 	gpio_set_value(reset_gpio, op);
 	return op;
 }
@@ -564,9 +565,9 @@ static int __init rlk_inic_init(void) {
 		bridge = 1;
 	}
 #endif
-#ifdef NM_SUPPORT
-	RaCfgSetUp(pAd, dev);
-#endif
+//#ifdef NM_SUPPORT
+//	RaCfgSetUp(pAd, dev);
+//#endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	dev2 = alloc_etherdev(sizeof(iNIC_PRIVATE));
@@ -626,6 +627,7 @@ static int __init rlk_inic_init(void) {
 	dev2->priv_flags = INT_MAIN;
 
 #ifdef NM_SUPPORT 
+	RaCfgSetUp(pAd, dev);
 	RaCfgSetUp(pAd2, dev2);
 #endif
 

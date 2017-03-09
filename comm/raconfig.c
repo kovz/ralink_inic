@@ -653,20 +653,20 @@ void RaCfgSetUp(iNIC_PRIVATE *pAd, struct net_device *dev)
 		}
 	}
 	// TODO : bug in read second profile gAdapter[1] non initialized
-//#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-//	/* After the first time opening, read all profile to setting attribute*/
-//	if(ConcurrentObj.CardCount == 0)
-//	{
-//		for(i=0; i<CONCURRENT_CARD_NUM; i++)
-//		{
-//			printk("Read profile[%d]\n", i);
-//			rlk_inic_read_profile(gAdapter[i]);
-//		}
-//	}
-//#else
-//	rlk_inic_read_profile(pAd);
-//#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
+	/* After the first time opening, read all profile to setting attribute*/
+	if(ConcurrentObj.CardCount == 0)
+	{
+		for(i=0; i<CONCURRENT_CARD_NUM; i++)
+		{
+			printk("Read profile[%d]\n", i);
+			rlk_inic_read_profile(gAdapter[i]);
+		}
+	}
+#else
 	rlk_inic_read_profile(pAd);
+#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+//	rlk_inic_read_profile(pAd);
 	if (pAd->RaCfgObj.opmode)
 	{
 		if (pAd->RaCfgObj.bApcli && ((pAd->RaCfgObj.BssidNum+1) > MAX_MBSSID_NUM))
@@ -778,7 +778,7 @@ static int get_mac_from_inic(iNIC_PRIVATE *pAd)
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	if(ConcurrentObj.CardCount== 0)
 #endif // #ifdef CONFIG_CONCURRENT_INIC_SUPPORT //		
-	ret = RaCfgWaitSyncRsp(pAd, RACFG_CMD_GET_MAC, 0, NULL, NULL, GET_MAC_TIMEOUT); // 1 hours = infinitely 
+	ret = RaCfgWaitSyncRsp(pAd, RACFG_CMD_GET_MAC, 0, NULL, NULL, GET_MAC_TIMEOUT); // 1 hours = infinitely
 	if (ret)
 	{
 		printk("ERROR! can't get target's MAC address, boot fail.\n");
@@ -1114,15 +1114,21 @@ int RaCfgOpenFile(iNIC_PRIVATE *pAd, FWHandle *pfwh, int flag)
 	const struct firmware *fw;
 	int rc = 0;
 
-	if (pfwh->fw_data)	return 0;
+	if (pfwh->fw_data)
+		kfree(pfwh->fw_data);
+	pfwh->fw_data = NULL;
+	pfwh->size = 0;
+	pfwh->r_off = 0;
+	pfwh->seq = 0;
+	pfwh->crc = 0;
 
 	printk("Request file: %s\n", pfwh->name);
 
-	pfwh->seq  = 0;
 	if(0 != request_firmware(&fw, pfwh->name, &pAd->dev->dev)){
 		dev_err(&pAd->dev->dev, "Fail request file %s\n", pfwh->name);
 		return -1;
 	}
+
 	pfwh->fw_data = kmalloc(fw->size, MEM_ALLOC_FLAG);
 	if(pfwh->fw_data){
 		memcpy(pfwh->fw_data, fw->data, fw->size);
@@ -1132,13 +1138,13 @@ int RaCfgOpenFile(iNIC_PRIVATE *pAd, FWHandle *pfwh, int flag)
 		rc = -1;
 	}
 	release_firmware(fw);
+
 	return rc;
 }
 
 void RaCfgCloseFile(iNIC_PRIVATE *pAd, FWHandle *pfwh)
 {
 	kfree(pfwh->fw_data);
-	dev_info(&pAd->dev->dev, "Close file error: %s\n", pfwh->name);
 	pfwh->fw_data = NULL;
 	pfwh->size = 0;
 	pfwh->seq = 0;
@@ -1386,7 +1392,7 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 	unsigned char *last_hdr = 0;
 	unsigned char buff[CRC_HEADER_LEN];
 
-	if (!firmware)	return;
+	if (!firmware->fw_data)	return;
 	if(firmware->r_off < firmware->size){
 		rest = firmware->size - firmware->r_off;
 		len = rest < MAX_FEEDBACK_LEN ? rest : MAX_FEEDBACK_LEN;
@@ -1446,12 +1452,12 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 	mod_timer(&pAd->RaCfgObj.uploadTimer, jiffies + RetryTimeOut*HZ/1000);
 #endif
 		SendRaCfgCommand(pAd, 
-						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_PASSIVE_MASK, 
+						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_RSP_FLAG,
 						 RACFG_CMD_BOOT_UPLOAD, len, firmware->seq, 0, 0, 0, pAd->RaCfgObj.upload_buf);
-		//printk("Send %d packet (%d bytes) to iNIC\n", fh->seq, len);
+		printk("Send %d packet (%d bytes) to iNIC\n", firmware->seq, len);
 		firmware->seq++;
 		total += len;
-		msleep (30);
+//		msleep (10);
 	}
 	else
 	{
@@ -1840,12 +1846,11 @@ int _append_extra_profile2(iNIC_PRIVATE *pAd, int len)
 
 static void _upload_profile(iNIC_PRIVATE *pAd)
 {
-	int len = 0, extra = 0, e2pLen = 0, room_left = MAX_FEEDBACK_LEN;
+	int len = 0, len2 = 0, extra = 0, e2pLen = 0, room_left = MAX_FEEDBACK_LEN;
 	loff_t rest = 0;
 	FWHandle *pProfile = &pAd->RaCfgObj.profile;
 	FWHandle *pE2p = &pAd->RaCfgObj.ext_eeprom;
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-	int len2 = 0;	
 	FWHandle *pProfile2 = NULL;
 	static unsigned char bStartSecondProfile = FALSE;
 	int i;
@@ -1856,7 +1861,7 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 	
 
-	if (!pProfile.fw_data) return;
+	if (!pProfile->fw_data) return;
 
 	memset(pAd->RaCfgObj.test_pool, 0, MAX_FEEDBACK_LEN);
 	//len = read(cfg_fd, RaCfgObj.test_pool, MAX_FEEDBACK_LEN);
@@ -1924,7 +1929,7 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 
 		if (gAdapter[i]->RaCfgObj.bExtEEPROM && len < MAX_FEEDBACK_LEN)
 		{
-			if (!pE2p.fw_data)
+			if (!pE2p->fw_data)
 			{
 				printk("upload_profile Error : Can't read External EEPROM File\n");
 				return;
@@ -1941,7 +1946,7 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 	}	
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
-//	printk("Upload Profile %d bytes from file, %d from extra...\n", len, extra);
+	printk("Upload Profile %d bytes from file, %d from extra...\n", len, extra);
 
 	if (len > 0)
 	{
@@ -2015,7 +2020,7 @@ static void RaCfgConcurrentOpenAction(void *arg)
 {
 
 	iNIC_PRIVATE *pAd = (iNIC_PRIVATE *)arg;
-	int i, rc;
+	int i;
 	
 	// TODO : Firmware loads only for first adapter
 	
@@ -2076,12 +2081,12 @@ static void RaCfgConcurrentOpenAction(void *arg)
 	for(i = 0; i < CONCURRENT_CARD_NUM; i++)
 	{
 		RaCfgCloseFile(pAd, &ConcurrentObj.Profile[i]);
-		if( !RaCfgOpenFile(pAd, &ConcurrentObj.Profile[i],  O_RDONLY))
+		if( 0 != RaCfgOpenFile(pAd, &ConcurrentObj.Profile[i],  O_RDONLY))
 			return;
 		if (gAdapter[i]->RaCfgObj.bExtEEPROM)
 		{
 			RaCfgCloseFile(gAdapter[i], &ConcurrentObj.ExtEeprom[i]);
-			if( !RaCfgOpenFile(gAdapter[i], &ConcurrentObj.ExtEeprom[i],  O_RDONLY))
+			if( 0 != RaCfgOpenFile(gAdapter[i], &ConcurrentObj.ExtEeprom[i],  O_RDONLY))
 				return;
 			gAdapter[i]->RaCfgObj.bGetExtEEPROMSize = 0;        
 		}		
@@ -2209,7 +2214,7 @@ static void RaCfgUploadAction(void *arg)
 
 	if (sequence != pAd->RaCfgObj.firmware.seq-1)
 	{
-#if 0
+#if 1
 		printk("WARNING! iNIC firmware ack sequence %d<->%d mismatched," 
 			   "duplicated packet? ignore...\n", 
 			   sequence, pAd->RaCfgObj.firmware.seq-1);
@@ -2259,11 +2264,12 @@ static void RaCfgInitCfgAction(void * arg)
 	if (sequence != pAd->RaCfgObj.profile.seq-1)
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT
 	{
-#if 0
+#if 1
 		printk("WARNING! iNIC profile ack sequence %d<->%d mismatched," 
 			   "duplicated packet? ignore...\n", 
 			   sequence, pAd->RaCfgObj.profile.seq-1);
 #endif
+		kfree_skb(skb);
 		return;
 	}
 
@@ -2291,23 +2297,24 @@ static void RaCfgInitCfgAction(void * arg)
 #endif
 #if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
 #ifdef PHASE_LOAD_CODE
-		if (!pAd->RaCfgObj.bLoadPhase)
-		{
+	if (!pAd->RaCfgObj.bLoadPhase)
+	{
 #ifdef RETRY_PKT_SEND
-			// delete timer
-			if (pAd->RaCfgObj.uploadTimer.function)
-			{
-				del_timer_sync(&pAd->RaCfgObj.uploadTimer);
-				pAd->RaCfgObj.uploadTimer.function = NULL;
-				pAd->RaCfgObj.uploadTimer.data = 0;
-			}
-#endif
-			_upload_firmware(pAd);
+		// delete timer
+		if (pAd->RaCfgObj.uploadTimer.function)
+		{
+			del_timer_sync(&pAd->RaCfgObj.uploadTimer);
+			pAd->RaCfgObj.uploadTimer.function = NULL;
+			pAd->RaCfgObj.uploadTimer.data = 0;
 		}
-		else
+#endif
+		_upload_profile(pAd);
+	}
+	else
 #endif
 #endif
-	_upload_profile(pAd);
+		_upload_firmware(pAd);
+
 }
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
 static void rlk_inic_check_mac(iNIC_PRIVATE *pAd)

@@ -136,7 +136,7 @@ void rlk_inic_mbss_init (
 		}
 		else
 #endif
-		ad_p->RaCfgObj.MBSSID[bss_index].Bssid[5] += bss_index;
+			ad_p->RaCfgObj.MBSSID[bss_index].Bssid[5] += bss_index;
 
 		memmove(new_dev_p->dev_addr,
 				ad_p->RaCfgObj.MBSSID[bss_index].Bssid, MAC_ADDR_LEN);
@@ -147,11 +147,12 @@ void rlk_inic_mbss_init (
 		Netdev_Ops[bss_index].ndo_start_xmit		= MBSS_VirtualIF_PacketSend;
 		Netdev_Ops[bss_index].ndo_do_ioctl       = MBSS_VirtualIF_Ioctl;
 		Netdev_Ops[bss_index].ndo_get_stats      = VirtualIF_get_stats;
-		new_dev_p->netdev_ops = (const struct net_device_ops *)&Netdev_Ops[bss_index];	
-		new_dev_p->priv_flags       = INT_MBSSID; /* we are virtual interface */
+		new_dev_p->netdev_ops = &Netdev_Ops[bss_index];
 
 		/* register this device to OS */
 		register_netdev(new_dev_p);
+		DBGPRINT("register_netdev done\n");
+		new_dev_p->priv_flags = INT_MBSSID; /* we are virtual interface */
 		/* backup our virtual network interface */
 		ad_p->RaCfgObj.MBSSID[bss_index].MSSIDDev = new_dev_p;
 	} /* End of for */
