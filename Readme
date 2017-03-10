@@ -1,0 +1,4 @@
+/usr/sbin/mem -u -s 0x1e10b200 -w 0x4024	# MII_CFG_5 (mii_base + portnum*8) = MII_CFG_EN | MII_CFG_RATE_M125 | MII_CFG_MODE_RGMII
+/usr/sbin/mem -u -s 0x1e10b204 -w 0xc003	# PCDU_5
+/usr/sbin/mem -u -s 0x1e10a40c -w 0x0180	# MAC_CTRL_0 todo :switch settings
+/usr/sbin/mem -u -s 0x1e10b140 -w 0x3205	# PHY_ADDR_5 mdio_base + (0x54 -(portnum*4)) = MDIO_PHY_LINK_UP | MDIO_PHY_SPEED_G1 | MDIO_PHY_FDUP_EN | phyaddr
