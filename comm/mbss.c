@@ -167,10 +167,12 @@ void rlk_inic_mbss_restart(void *arg)
 	int dev_id;
 	int error;
 
+	DBGPRINT("----> %s\n", __FUNCTION__);
+
 	for (dev_id=FIRST_MBSSID; dev_id<pAd->RaCfgObj.BssidNum; dev_id++)
 	{
 		error = 1;
-
+		DBGPRINT("MBSS[%d].flags: %d\n", dev_id, pAd->RaCfgObj.MBSSID[dev_id].flags);
 		if (pAd->RaCfgObj.MBSSID[dev_id].flags)
 		{
 			error = MbssHandler(pAd, RACFG_CMD_MBSS_OPEN, dev_id);
@@ -755,12 +757,15 @@ static void make_mbss_frame(
 
 static int MbssHandler(iNIC_PRIVATE *pAd, int cmd, int dev_id)
 {
+
 	static unsigned short cmd_seq = 0;
 
 	//unsigned char buffer[sizeof(struct racfghdr)];
 	//unsigned char *p = &buffer[0];
 	struct iwreq wrq; // dummy
 	int error = 0;
+
+	DBGPRINT("----> %s\n", __FUNCTION__);
 
 	SendRaCfgCommand(pAd, RACFG_CMD_TYPE_SYNC, cmd, 0, 0, cmd_seq, 0, dev_id, NULL);
 

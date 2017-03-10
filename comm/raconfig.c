@@ -3509,9 +3509,6 @@ static void rlk_inic_set_mac(iNIC_PRIVATE *pAd, char *mac_addr)
 
 #ifndef NM_SUPPORT
 
-#ifndef container_of
-#define container_of    list_entry
-#endif
 #define TO_RAOBJ(obj)    container_of(obj, RACFG_OBJECT, net_dev_notifier)
 /*
  * Closing MBSS at NETDEV_GOING_DOWN, instead of rlk_inic_close() ,
@@ -3519,98 +3516,96 @@ static void rlk_inic_set_mac(iNIC_PRIVATE *pAd, char *mac_addr)
  */
  
 static int netdev_event(
-					   struct notifier_block *this,
-					   unsigned long event, void *arg)
+		struct notifier_block *this,
+		unsigned long event, void *arg)
 {
-        printk("EVENT 0x%lu\n",event);
-        if (event == NETDEV_UP)
-        {
-          RACFG_OBJECT  *pRaObj = (RACFG_OBJECT *)TO_RAOBJ(this);
-          struct net_device *dev = (struct net_device *)pRaObj->MainDev;
-          iNIC_PRIVATE *rt = netdev_priv(dev);
-
-            printk("NETDEV UP\n");
-            RaCfgFifoRestart(rt);
-        }
-
-        else
-	if (event == NETDEV_GOING_DOWN)
+	printk("EVENT 0x%lu\n",event);
+	if (event == NETDEV_UP)
 	{
-		if (arg)
+		RACFG_OBJECT  *pRaObj = TO_RAOBJ(this);
+		struct net_device *dev = (struct net_device *)pRaObj->MainDev;
+		iNIC_PRIVATE *rt = netdev_priv(dev);
+
+		printk("NETDEV UP\n");
+		RaCfgFifoRestart(rt);
+	} else
+		if (event == NETDEV_GOING_DOWN)
 		{
-			RACFG_OBJECT  *pRaObj = (RACFG_OBJECT *)TO_RAOBJ(this);
+			if (arg)
+			{
+				RACFG_OBJECT  *pRaObj = TO_RAOBJ(this);
 
 #ifdef WOWLAN_SUPPORT 	
-			if(pRaObj->bWoWlanUp == TRUE && pRaObj->pm_wow_state == WOW_CPU_DOWN )
-			{
-				DBGPRINT("CPU is in Sleep mode....\n");
-				return NOTIFY_OK;
-			}
-			else
-			{
-				DBGPRINT("pRaObj->pm_wow_state = %ld \n", pRaObj->pm_wow_state);
-			}	
+				if(pRaObj->bWoWlanUp == TRUE && pRaObj->pm_wow_state == WOW_CPU_DOWN )
+				{
+					DBGPRINT("CPU is in Sleep mode....\n");
+					return NOTIFY_OK;
+				}
+				else
+				{
+					DBGPRINT("pRaObj->pm_wow_state = %ld \n", pRaObj->pm_wow_state);
+				}
 #endif // WOWLAN_SUPPORT // 			
-			
-			if (arg == pRaObj->MainDev)
-			{
-				DBGPRINT("Net device %s going down....\n", ((struct net_device *)arg)->name);
-				close_all_interfaces((struct net_device *)arg);
-			}
+
+				if (arg == pRaObj->MainDev)
+				{
+					DBGPRINT("Net device %s going down....\n", ((struct net_device *)arg)->name);
+					close_all_interfaces((struct net_device *)arg);
+				}
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
 #ifndef MII_SLAVE_STANDALONE
-			else
-			{
-				struct net_device *dev = (struct net_device *)pRaObj->MainDev;
-				iNIC_PRIVATE *pAd = (iNIC_PRIVATE *) netdev_priv(dev);
-				if (arg == pAd->master && NETIF_IS_UP(dev))
+				else
 				{
-					DBGPRINT("WARNING: wireless slave (%s) for "
-							 "MII (%s) also going down....\n", 
-							 pRaObj->MainDev->name, 
-							 ((struct net_device *)arg)->name);
-					dev_close(dev);
+					struct net_device *dev = (struct net_device *)pRaObj->MainDev;
+					iNIC_PRIVATE *pAd = (iNIC_PRIVATE *) netdev_priv(dev);
+					if (arg == pAd->master && NETIF_IS_UP(dev))
+					{
+						DBGPRINT("WARNING: wireless slave (%s) for "
+								"MII (%s) also going down....\n",
+								pRaObj->MainDev->name,
+								((struct net_device *)arg)->name);
+						dev_close(dev);
+					}
 				}
+#endif
+#endif
 			}
-#endif
-#endif
+			return NOTIFY_OK;
 		}
-		return NOTIFY_OK;
-	}
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
 
-	else if (event == NETDEV_REGISTER)
-	{
-		RACFG_OBJECT  *pRaObj = (RACFG_OBJECT *)TO_RAOBJ(this);
-		struct net_device *dev = (struct net_device *)pRaObj->MainDev;
-		iNIC_PRIVATE *pAd = (iNIC_PRIVATE *) netdev_priv(dev);
-		if (!pAd->master) // master unregistered, get it back
+		else if (event == NETDEV_REGISTER)
 		{
-			struct net_device *master = (struct net_device *)arg;
-
-			if (!strcmp(master->name, miimaster))
-			{
-				printk("MII master (%s) registration detected.\n", 
-					   master->name);
-				pAd->master = master;
-			}
-		}
-	}
-	else if (event == NETDEV_UNREGISTER)
-	{
-		if (arg)
-		{
-			RACFG_OBJECT  *pRaObj = (RACFG_OBJECT *)TO_RAOBJ(this);
+			RACFG_OBJECT  *pRaObj = TO_RAOBJ(this);
 			struct net_device *dev = (struct net_device *)pRaObj->MainDev;
 			iNIC_PRIVATE *pAd = (iNIC_PRIVATE *) netdev_priv(dev);
-			if (arg == pAd->master)
+			if (!pAd->master) // master unregistered, get it back
 			{
-				printk("MII master (%s) unregistration detected.\n", 
-					   pAd->master->name);
-				pAd->master = NULL;
+				struct net_device *master = (struct net_device *)arg;
+
+				if (!strcmp(master->name, miimaster))
+				{
+					printk("MII master (%s) registration detected.\n",
+							master->name);
+					pAd->master = master;
+				}
 			}
 		}
-	}
+		else if (event == NETDEV_UNREGISTER)
+		{
+			if (arg)
+			{
+				RACFG_OBJECT  *pRaObj = TO_RAOBJ(this);
+				struct net_device *dev = (struct net_device *)pRaObj->MainDev;
+				iNIC_PRIVATE *pAd = (iNIC_PRIVATE *) netdev_priv(dev);
+				if (arg == pAd->master)
+				{
+					printk("MII master (%s) unregistration detected.\n",
+							pAd->master->name);
+					pAd->master = NULL;
+				}
+			}
+		}
 #endif
 	return NOTIFY_DONE;
 }
