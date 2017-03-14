@@ -22,7 +22,7 @@ static struct net_device_ops Netdev_Ops[MAX_MBSSID_NUM];
 
 void rlk_inic_mbss_init (
 					  struct net_device *main_dev_p, 
-					  iNIC_PRIVATE *ad_p)
+					  iNIC_PRIVATE *pAd)
 {
 	struct net_device *cur_dev_p;
 	char   slot_name[IFNAMSIZ];
@@ -31,22 +31,22 @@ void rlk_inic_mbss_init (
 	int bss_index, max_bss_num;
 	int index = 0;
 
-	if (ad_p->RaCfgObj.flg_mbss_init)
+	if (pAd->RaCfgObj.flg_mbss_init)
 		return;
 
-	ad_p->RaCfgObj.flg_mbss_init = 1;
+	pAd->RaCfgObj.flg_mbss_init = 1;
 
 	printk("%s --->\n", __FUNCTION__);
 
 	/* init */
-	max_bss_num = ad_p->RaCfgObj.BssidNum;
+	max_bss_num = pAd->RaCfgObj.BssidNum;
 	if (max_bss_num > MAX_MBSSID_NUM)
 		max_bss_num = MAX_MBSSID_NUM;
 	/* End of if */
 
 	/* first bss_index must not be 0 (BSS0), must be 1 (BSS1) */
 	for (bss_index = FIRST_MBSSID; bss_index < MAX_MBSSID_NUM; bss_index++)
-		ad_p->RaCfgObj.MBSSID[bss_index].MSSIDDev = NULL;
+		pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev = NULL;
 	/* End of for */
 
 
@@ -58,7 +58,7 @@ void rlk_inic_mbss_init (
 		if (new_dev_p == NULL)
 		{
 			/* allocation fail, exit */
-			ad_p->RaCfgObj.BssidNum = bss_index; /* re-assign new MBSS number */
+			pAd->RaCfgObj.BssidNum = bss_index; /* re-assign new MBSS number */
 			printk("Allocate network device fail (MBSS)...\n");
 			break;
 		} /* End of if */
@@ -68,8 +68,8 @@ void rlk_inic_mbss_init (
 		{
 
 #if defined(MULTIPLE_CARD_SUPPORT) || defined(CONFIG_CONCURRENT_INIC_SUPPORT)
-			if (ad_p->RaCfgObj.InterfaceNumber >= 0)
-				snprintf(slot_name, sizeof(slot_name), "%s%02d_%d", INIC_INFNAME, ad_p->RaCfgObj.InterfaceNumber, index);
+			if (pAd->RaCfgObj.InterfaceNumber >= 0)
+				snprintf(slot_name, sizeof(slot_name), "%s%02d_%d", INIC_INFNAME, pAd->RaCfgObj.InterfaceNumber, index);
 			else
 #endif
 				snprintf(slot_name, sizeof(slot_name),"%s%d", INIC_INFNAME, index);
@@ -92,8 +92,8 @@ void rlk_inic_mbss_init (
 		{
 
 #if defined(MULTIPLE_CARD_SUPPORT) || defined(CONFIG_CONCURRENT_INIC_SUPPORT)
-			if (ad_p->RaCfgObj.InterfaceNumber >= 0)
-				snprintf(new_dev_p->name, sizeof(new_dev_p->name), "%s%02d_%d", INIC_INFNAME, ad_p->RaCfgObj.InterfaceNumber, index);
+			if (pAd->RaCfgObj.InterfaceNumber >= 0)
+				snprintf(new_dev_p->name, sizeof(new_dev_p->name), "%s%02d_%d", INIC_INFNAME, pAd->RaCfgObj.InterfaceNumber, index);
 			else
 #endif		
 				snprintf(new_dev_p->name, sizeof(new_dev_p->name), "%s%d", INIC_INFNAME, index);
@@ -102,7 +102,7 @@ void rlk_inic_mbss_init (
 		else
 		{
 			/* error! no any available ra name can be used! */
-			ad_p->RaCfgObj.BssidNum = bss_index; /* re-assign new MBSS number */
+			pAd->RaCfgObj.BssidNum = bss_index; /* re-assign new MBSS number */
 			printk("Has %d RA interfaces (MBSS)...\n", MBSS_MAX_DEV_NUM);
 			kfree(new_dev_p);
 			break;
@@ -119,27 +119,27 @@ void rlk_inic_mbss_init (
 
 		/* init MAC address of virtual network interface */
 
-		memmove(ad_p->RaCfgObj.MBSSID[bss_index].Bssid, 
+		memmove(pAd->RaCfgObj.MBSSID[bss_index].Bssid, 
 				main_dev_p->dev_addr, MAC_ADDR_LEN);
 
 #ifdef NEW_MBSS_SUPPORT
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-		if(ad_p == gAdapter[0])
+		if(pAd == gAdapter[0])
 #else
 		if(1)
 #endif
 		{
 			if(bss_index > 0){
-				ad_p->RaCfgObj.MBSSID[bss_index].Bssid[0] += 2;
-				ad_p->RaCfgObj.MBSSID[bss_index].Bssid[0] += ((bss_index - 1) << 2);
+				pAd->RaCfgObj.MBSSID[bss_index].Bssid[0] += 2;
+				pAd->RaCfgObj.MBSSID[bss_index].Bssid[0] += ((bss_index - 1) << 2);
 			}
 		}
 		else
 #endif
-			ad_p->RaCfgObj.MBSSID[bss_index].Bssid[5] += bss_index;
+			pAd->RaCfgObj.MBSSID[bss_index].Bssid[5] += bss_index;
 
 		memmove(new_dev_p->dev_addr,
-				ad_p->RaCfgObj.MBSSID[bss_index].Bssid, MAC_ADDR_LEN);
+				pAd->RaCfgObj.MBSSID[bss_index].Bssid, MAC_ADDR_LEN);
 
 		/* init operation functions */
 		Netdev_Ops[bss_index].ndo_open		= MBSS_VirtualIF_Open;
@@ -150,11 +150,11 @@ void rlk_inic_mbss_init (
 		new_dev_p->netdev_ops = &Netdev_Ops[bss_index];
 
 		/* register this device to OS */
-		register_netdev(new_dev_p);
+		register_netdevice(new_dev_p);
 		DBGPRINT("register_netdev done\n");
 		new_dev_p->priv_flags = INT_MBSSID; /* we are virtual interface */
 		/* backup our virtual network interface */
-		ad_p->RaCfgObj.MBSSID[bss_index].MSSIDDev = new_dev_p;
+		pAd->RaCfgObj.MBSSID[bss_index].MSSIDDev = new_dev_p;
 	} /* End of for */
 
 	printk("%s <---\n", __FUNCTION__);
