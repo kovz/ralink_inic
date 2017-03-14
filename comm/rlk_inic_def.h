@@ -416,7 +416,7 @@ typedef struct inic_private
 {
 	struct net_device   *dev;
 	struct net_device   *master;
-	spinlock_t          lock;
+//	spinlock_t          lock;
 	u32                 msg_enable;
 	struct net_device_stats     net_stats;
 

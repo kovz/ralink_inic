@@ -280,8 +280,9 @@ static int mii_open(struct net_device *dev) {
 	// to start racfg_frame_handle()
 	RaCfgInterfaceOpen(pAd);
 
-	if (netif_msg_ifup(pAd))
-		printk(KERN_DEBUG "%s: enabling interface\n", dev->name);
+	// TODO : Doesn't set enywhere
+//	if (netif_msg_ifup(pAd))
+//		printk(KERN_DEBUG "%s: enabling interface\n", dev->name);
 
 	netif_carrier_on(dev);
 	netif_start_queue(dev);
@@ -495,7 +496,7 @@ static int __init rlk_inic_init(void) {
 #ifdef NM_SUPPORT
 	pAd->hardware_reset = mii_hardware_reset;
 #endif
-	spin_lock_init(&pAd->lock);
+//	spin_lock_init(&pAd->lock);
 	dev->netdev_ops = &Netdev_Ops[0];
 
 	//dev->weight             = 64;	/* arbitrary? from NAPI_HOWTO.txt. */
@@ -589,7 +590,7 @@ static int __init rlk_inic_init(void) {
 #ifdef NM_SUPPORT
 	pAd2->hardware_reset = NULL;
 #endif
-	spin_lock_init(&pAd2->lock);
+//	spin_lock_init(&pAd2->lock);
 	dev2->netdev_ops = &Netdev_Ops[1];
 	for (i = 0; i < 32; i++) {
 		snprintf(name, sizeof(name), "%s01_%d", INIC_INFNAME, i);
