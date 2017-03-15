@@ -1921,10 +1921,11 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 			len2 = rest <= room_left ? rest : room_left;
 			memcpy(pAd->RaCfgObj.test_pool+len, &pProfile2->fw_data[pProfile2->r_off], len2);
 			pProfile2->r_off += len2;
+			len += len2;
+			room_left -= len2;
 		}
 	}
-	len += len2;
-	room_left -= len2;
+
 	/* upload attributes of the 2nd card and null string terminator */
 	extra = _append_extra_profile2(gAdapter[1], len);
 	len += extra;
@@ -1947,9 +1948,9 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 				e2pLen = rest <= room_left ? rest : room_left;
 				memcpy(pAd->RaCfgObj.test_pool+len, &pE2p->fw_data[pE2p->r_off], e2pLen);
 				pE2p->r_off += e2pLen;
+				len += e2pLen;
+				room_left -= e2pLen;
 			}
-			len += e2pLen;
-			room_left -= e2pLen;
 		}
 	}	
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
