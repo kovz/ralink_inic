@@ -570,6 +570,7 @@ static void RaCfgHeartBeatTimeOut(unsigned long arg)
 		new_task.func = RaCfgRestartiNIC;
 		new_task.arg = pAd;
 		kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
+		wake_up_interruptible(&pAd->RaCfgObj.backlogQH);
 	}
 
 	pAd->RaCfgObj.HeartBeatCount = 0;   
@@ -582,13 +583,20 @@ static void RaCfgFifoRestart(iNIC_PRIVATE *pAd)
 	new_task.arg = pAd;
 	new_task.func = rlk_inic_mbss_restart;
 	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
+	wake_up_interruptible(&pAd->RaCfgObj.backlogQH);
+
 	new_task.func = rlk_inic_wds_restart;
 	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
+	wake_up_interruptible(&pAd->RaCfgObj.backlogQH);
+
 	new_task.func = rlk_inic_apcli_restart;
 	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
+	wake_up_interruptible(&pAd->RaCfgObj.backlogQH);
+
 #ifdef MESH_SUPPORT
 	new_task.func = rlk_inic_mesh_restart
 	kfifo_in(&pAd->RaCfgObj.backlog_fifo, &new_task, 1);
+	wake_up_interruptible(&pAd->RaCfgObj.backlogQH);
 #endif // MESH_SUPPORT // 
 
 }
@@ -2702,6 +2710,7 @@ void IoctlRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 	} else {
 		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
 		pAd->RaCfgObj.wait_completed++;
+		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 	}
 
 	wake_up_interruptible(&pAd->RaCfgObj.waitQH);
@@ -2716,6 +2725,7 @@ void FeedbackRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		kfree_skb(skb);
 	} else {
 		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
+		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 	}
 }
 
@@ -2769,6 +2779,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			new_task.func = RaCfgOpenAction;
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 			kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+			wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 			bDropMultiBootNotify = 1;
 		}
 #else
@@ -2793,6 +2804,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			new_task.func = RaCfgOpenAction;
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 				kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+				wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 #endif
 				kfree_skb(skb);
 			break;
@@ -2809,6 +2821,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			new_task.func = RaCfgInitCfgAction;
 			new_task.arg = box;
 			kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+			wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 		break;
 	case RACFG_CMD_BOOT_UPLOAD:
 		if (seq < 3)
@@ -2827,6 +2840,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		new_task.func = RaCfgUploadAction;
 		new_task.arg = box;
 		kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+		wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 		break;
 	case RACFG_CMD_BOOT_STARTUP:
 		DBGPRINT("RACFG_CMD_BOOT_STARTUP\n");
@@ -4148,6 +4162,7 @@ static void RaCfgWowInbandTimeout(uintptr_t arg)
 	}else {
 		HndlTask new_task = {RaCfgWowInbandSend, pAd};
 		kfifo_in(&pAd->RaCfgObj.backlog_fifo, new_task, 1);
+		wake_up_interruptible(&pAd->RaCfgObj.backlogQH);
 	}
 	mod_timer(&pAd->RaCfgObj.WowInbandSignalTimer, jiffies + WOW_INBAND_TIMEOUT * HZ);
 }
