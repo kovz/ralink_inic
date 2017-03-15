@@ -1465,7 +1465,7 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 		printk("Send %d packet (%d bytes) to iNIC\n", firmware->seq, len);
 		firmware->seq++;
 		total += len;
-//		msleep (10);
+		msleep (10);
 	}
 	else
 	{
@@ -2714,7 +2714,7 @@ void IoctlRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 	}
 
-	wake_up_interruptible(&pAd->RaCfgObj.waitQH);
+//	wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 }
 
 void FeedbackRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
@@ -3542,7 +3542,7 @@ static int netdev_event(
 		iNIC_PRIVATE *rt = netdev_priv(dev);
 
 		printk("NETDEV UP\n");
-		RaCfgFifoRestart(rt);
+//		RaCfgFifoRestart(rt);
 	} else
 		if (event == NETDEV_GOING_DOWN)
 		{
