@@ -276,8 +276,8 @@ typedef struct _VIRTUAL_ADAPTER
 //#define TEST_BOOT_RECOVER 1
 
 #ifdef RETRY_PKT_SEND
-#define RetryTimeOut 1000    // default 50ms, better set timeout >= 50ms
-#define FwRetryCnt	10		 // retry counts for fw upload
+#define RetryTimeOut 10    // default 50ms, better set timeout >= 50ms
+#define FwRetryCnt	100		 // retry counts for fw upload
 #define InbandRetryCnt	3	// retry counts for inband
 
 typedef struct _RETRY_PKT_INFO

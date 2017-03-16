@@ -863,7 +863,7 @@ static int RaCfgBacklogThread(void *arg)
 			continue;
 		}
 		if(!kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task)){
-			DBGPRINT("Unexpected empty backlog_fifo");
+//			DBGPRINT("Unexpected empty backlog_fifo");
 			continue;
 		}
 		if(curr_task.func)
@@ -898,7 +898,7 @@ static int RaCfgTaskThread(void *arg)
 			continue;
 		}
 		if(!kfifo_get(&pAd->RaCfgObj.task_fifo, &curr_task)){
-			DBGPRINT("Unexpected empty task_fifo");
+//			DBGPRINT("Unexpected empty task_fifo");
 			continue;
 		}
 		if(curr_task.func){
@@ -1462,10 +1462,10 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 		SendRaCfgCommand(pAd, 
 						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_RSP_FLAG,
 						 RACFG_CMD_BOOT_UPLOAD, len, firmware->seq, 0, 0, 0, pAd->RaCfgObj.upload_buf);
-		printk("Send %d packet (%d bytes) to iNIC\n", firmware->seq, len);
+//		printk("Send %d packet (%d bytes) to iNIC\n", firmware->seq, len);
 		firmware->seq++;
 		total += len;
-		msleep (10);
+		//msleep (0);
 	}
 	else
 	{
@@ -2017,7 +2017,7 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 		if (pAd->RaCfgObj.bExtEEPROM)
 			RaCfgCloseFile(pAd, &pAd->RaCfgObj.ext_eeprom);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-
+		msleep (1000);
 		_upload_firmware(pAd);
 	} 
 
@@ -2421,7 +2421,7 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 		}
 		RTMP_SEM_LOCK(&pAd->RaCfgObj.waitLock);
 		if(!kfifo_get(&pAd->RaCfgObj.backlog_fifo, &curr_task)){
-			DBGPRINT("Unexpected empty backlog_fifo");
+//			DBGPRINT("Unexpected empty backlog_fifo");
 			RTMP_SEM_UNLOCK(&pAd->RaCfgObj.waitLock);
 			continue;
 		}
