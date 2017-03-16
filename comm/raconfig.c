@@ -1422,10 +1422,11 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 			{
 				unsigned char *pp = (char *)(pAd->RaCfgObj.upload_buf + len - CRC_HEADER_LEN);
 				int i = 0;
-				printk("\nCRC:");
-				for (i = 0; i < CRC_HEADER_LEN; pp++, i++)
-					printk("%02x ", *pp);
-				printk("\n");
+				dev_info(&pAd->dev->dev, "CRC: %*ph\n", CRC_HEADER_LEN, &pAd->RaCfgObj.upload_buf[len - CRC_HEADER_LEN]);
+//				printk("\nCRC:");
+//				for (i = 0; i < CRC_HEADER_LEN; pp++, i++)
+//					printk("%02x ", *pp);
+//				printk("\n");
 			}
 		}
 		else
