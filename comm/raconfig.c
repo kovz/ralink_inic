@@ -3078,8 +3078,14 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		case RACFG_CMD_TYPE_SYNC         | RACFG_CMD_TYPE_RSP_FLAG:
 		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
 		{
-			// TODO : Processing mac message
-			kfree_skb(skb);
+			HndlTask new_task = {NULL, skb};
+			if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
+				kfree_skb(skb);
+			} else {
+				kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
+				pAd->RaCfgObj.wait_completed++;
+				wake_up_interruptible(&pAd->RaCfgObj.waitQH);
+			}
 			break;
 		}
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
