@@ -158,7 +158,7 @@ static const struct net_device_ops Netdev_Ops[CONCURRENT_CARD_NUM] =
 //			 skb->protocol, ret, NULL, skb);
 //			 */
 //		}
-//		kfree_skb(skb);
+//		dev_kfree_skb(skb);
 //		return NULL;
 //	}
 //	return skb;
@@ -180,12 +180,12 @@ static int in_band_rcv(struct sk_buff *skb, struct net_device *dev, \
 
 	if (skb->pkt_type == PACKET_OUTGOING || pAd == NULL
 			|| pAd->master != skb->dev) {
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		return 1;
 	}
 
 	if (racfg_frame_handle(pAd, skb)) {
-		/* no need to call kfree_skb(), racfg_frame_handle() already does it itself */
+		/* no need to call dev_kfree_skb(), racfg_frame_handle() already does it itself */
 		return 0;
 	}
 
@@ -211,14 +211,14 @@ static struct packet_type in_band_packet_type = { .type = __constant_htons(
 static int sniff_arp(struct sk_buff *skb, struct net_device *dev, \
                     struct packet_type *pt, struct net_device *orig_dev) {
 	if (skb->pkt_type == PACKET_OUTGOING) {
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		return NET_RX_SUCCESS;
 	}
 
 	if (gAdapter[0] && skb->protocol != ETH_P_RACFG) {
 		hex_dump("sniff", skb->data, 32);
 	}
-	//kfree_skb(skb);
+	//dev_kfree_skb(skb);
 	return NET_RX_SUCCESS;
 }
 static struct packet_type arp_packet_type = { .type = __constant_htons(0x0806),

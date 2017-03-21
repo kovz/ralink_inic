@@ -427,7 +427,7 @@ void RaCfgExit(iNIC_PRIVATE *pAd)
 	racfg_inband_hook_cleanup();
 	if (pAd->RaCfgObj.eapol_skb != NULL)
 	{
-		kfree_skb(pAd->RaCfgObj.eapol_skb);
+		dev_kfree_skb(pAd->RaCfgObj.eapol_skb);
 	}
 #endif
 
@@ -1109,7 +1109,7 @@ static int RaCfgTaskThread(void *arg)
 			break;
 
 		}
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 	}
 
 	do_exit(0);
@@ -2237,11 +2237,11 @@ static void RaCfgUploadAction(void *arg)
 		DBGPRINT("UPLOAD(%d) ERROR! data check fail\n", sequence);
 		//hex_dump("local:", pAd->RaCfgObj.cmp_buf, len);
 		//hex_dump("remote:", data, len);
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		RaCfgRestartiNIC(pAd);
 		return;
 	}
-	kfree_skb(skb);
+	dev_kfree_skb(skb);
 
 #ifdef TEST_BOOT_RECOVER
 	{
@@ -2279,7 +2279,7 @@ static void RaCfgInitCfgAction(void * arg)
 			   "duplicated packet? ignore...\n", 
 			   sequence, pAd->RaCfgObj.profile.seq-1);
 #endif
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		return;
 	}
 
@@ -2288,12 +2288,12 @@ static void RaCfgInitCfgAction(void * arg)
 		DBGPRINT("INITCFG(%d) ERROR! data check fail\n", sequence);
 		//hex_dump("local:", pAd->RaCfgObj.test_pool, len);
 		//hex_dump("remote:", data, len);
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		RaCfgRestartiNIC(pAd);
 		return;
 	}
 
-	kfree_skb(skb);
+	dev_kfree_skb(skb);
 #ifdef TEST_BOOT_RECOVER
 	{
 		if (!pAd->RaCfgObj.cfg_simulated && sequence == 0)
@@ -2463,14 +2463,14 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 		{
 			printk("Warning: ignore response(%d bytes), mismatch command"
 				   "(%x<->%x)\n", len, command_id, cmd);
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			continue;
 		}
 		if (command_seq != cmd_seq)
 		{
 			printk("Warning: ignore response(%d bytes), mismatch sequence"
 				   "(%x<->%x)\n", len, command_seq, cmd_seq);
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			continue;
 		}
 
@@ -2552,7 +2552,7 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 				accumulate_buffer = NULL;
 			}
 #endif
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			return status;
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
 			ASSERT(wrq);
@@ -2686,7 +2686,7 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 			}
 			break;
 		}
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 
 #if 0 /* for debug only */		
 		printk("Receive data , len = %d:\n", len);
@@ -2708,7 +2708,7 @@ void IoctlRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 
 	HndlTask new_task = {NULL, skb};
 	if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 	} else {
 		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
 		pAd->RaCfgObj.wait_completed++;
@@ -2724,7 +2724,7 @@ void FeedbackRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 	//printk("Enqueue Feedback resp, queue size=%d..\n", pAd->RaCfgObj.taskQueue.num);
 	HndlTask new_task = {NULL, skb};
 	if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 	} else {
 		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
 		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
@@ -2752,7 +2752,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 
 	if(kfifo_is_full(&pAd->RaCfgObj.task_fifo)){
 			printk("ERROR, kfifo is full\n");
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			return;
 	}
 
@@ -2792,7 +2792,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			    pAd->RaCfgObj.dropNotifyCount++;
 			    if (pAd->RaCfgObj.dropNotifyCount <= MAX_NOTIFY_DROP_NUMBER)
 			    {
-			    	kfree_skb(skb);
+			    	dev_kfree_skb(skb);
 			    	break;
 			    }	
 		    }
@@ -2808,14 +2808,14 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
 				wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 #endif
-				kfree_skb(skb);
+				dev_kfree_skb(skb);
 			break;
 	case RACFG_CMD_BOOT_INITCFG:
 		DBGPRINT("RACFG_CMD_BOOT_INITCFG(%d)\n", seq);
 			if (!(box = GetArgBox()))
 			{
 				printk("ERROR, can't alloc ArgBox\n");
-				kfree_skb(skb);
+				dev_kfree_skb(skb);
 				break;
 			}
 			box->arg1 = pAd;
@@ -2834,7 +2834,7 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		if (!(box = GetArgBox()))
 		{
 			printk("ERROR, can't alloc ArgBox\n");
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			break;
 		}
 		box->arg1 = pAd;
@@ -2854,13 +2854,13 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				pAd->RaCfgObj.bLoadPhase = TRUE;
 #endif
 #endif
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		break;
 	case RACFG_CMD_BOOT_REGRD:
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		break;
 	case RACFG_CMD_BOOT_REGWR:
-		kfree_skb(skb);
+		dev_kfree_skb(skb);
 		break;
 	}
 }
@@ -2977,7 +2977,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			if((gAdapter[0] == NULL || gAdapter[1] == 0 ) ||
 					(!gAdapter[0]->RaCfgObj.flg_is_open && !gAdapter[1]->RaCfgObj.flg_is_open))
 			{
-				kfree_skb(skb);
+				dev_kfree_skb(skb);
 				return TRUE;
 			}				
 		}
@@ -3004,7 +3004,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 						case RACFG_CMD_HEART_BEAT:
 						case RACFG_CMD_CONSOLE:
 						{
-							kfree_skb(skb);
+							dev_kfree_skb(skb);
 							return TRUE;
 						}
 						break;
@@ -3014,7 +3014,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 					}else
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 					{
-						kfree_skb(skb);
+						dev_kfree_skb(skb);
 						return TRUE;
 					}
 				}
@@ -3029,7 +3029,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			if (memcmp(pSrcBufVA, pAd->master->dev_addr, 6) ||
 					memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
 			{
-				kfree_skb(skb);
+				dev_kfree_skb(skb);
 				return TRUE;
 			}
 		}
@@ -3049,7 +3049,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				if (memcmp(pSrcBufVA, pAd->RaCfgObj.MainDev->dev_addr, 6) ||
 						memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
 				{
-					kfree_skb(skb);
+					dev_kfree_skb(skb);
 					return TRUE;
 				}
 			}
@@ -3068,7 +3068,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				pAd->RaCfgObj.bRestartiNIC = FALSE;
 				RaCfgFifoRestart(pAd);
 			}
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 		}
 		else
 		{
@@ -3079,7 +3079,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
 		{
 			// TODO : Processing mac message
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			break;
 		}
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
@@ -3099,7 +3099,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			u16 src_port = le16_to_cpu(p_racfgh->dev_id);
 			u16 payload_len = le16_to_cpu(p_racfgh->length);
 			IgmpTunnelRcvPkt(p_racfgh->data, payload_len,src_port);
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			break;
 		}
 		case RACFG_CMD_TYPE_TUNNEL| RACFG_CMD_TYPE_RSP_FLAG:
@@ -3151,7 +3151,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				pAd->RaCfgObj.eapol_skb = dev_alloc_skb(MAX_EAPOL_SIZE);
 				if (pAd->RaCfgObj.eapol_skb == NULL)
 				{
-					kfree_skb(skb);
+					dev_kfree_skb(skb);
 					pAd->RaCfgObj.eapol_seq = 0;
 					pAd->RaCfgObj.eapol_command_seq = 0;
 					break;
@@ -3166,12 +3166,12 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 						payload, len);
 
 				// free wrapped eapol frame
-				kfree_skb(skb);
+				dev_kfree_skb(skb);
 			}
 			else
 			{
 				// free wrapped eapol frame
-				kfree_skb(skb);
+				dev_kfree_skb(skb);
 				pAd->RaCfgObj.eapol_seq = 0;
 				pAd->RaCfgObj.eapol_command_seq = 0;
 				pAd->RaCfgObj.eapol_skb->len = 0;
@@ -3230,7 +3230,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			u16 msg_type = le16_to_cpu(p_racfgh->dev_type);
 			u16 payload_len = le16_to_cpu(p_racfgh->length);
 			WIDINotify(pAd->RaCfgObj.MainDev, p_racfgh->data, payload_len, msg_type);
-			kfree_skb(skb);
+			dev_kfree_skb(skb);
 			break;
 		}
 #endif
