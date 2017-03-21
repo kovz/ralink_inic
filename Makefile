@@ -51,7 +51,7 @@ CONFIG_RALINK_SRC=y
 Aggregation_Enable=
 ifeq ($(CONFIG_INF_TYPE), MII)
 RetryPktSend_Enable=y
-PhaseLoadCode_Enable=y
+PhaseLoadCode_Enable=
 endif
 
 
@@ -146,7 +146,7 @@ _CFLAGS += -I$(RALINK_SRC)/mii -DCONFIG_INF_TYPE=INIC_INF_TYPE_MII
 ifeq ($(RetryPktSend_Enable), y)
 _CFLAGS += -DRETRY_PKT_SEND
 endif
-_CFLAGS += -DMII_SLAVE_STANDALONE
+#_CFLAGS += -DMII_SLAVE_STANDALONE
 endif
  
 ifeq ($(CONFIG_INF_TYPE), USB)

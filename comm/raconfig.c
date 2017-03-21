@@ -1463,7 +1463,7 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 		SendRaCfgCommand(pAd, 
 						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_RSP_FLAG,
 						 RACFG_CMD_BOOT_UPLOAD, len, firmware->seq, 0, 0, 0, pAd->RaCfgObj.upload_buf);
-		printk("Send %d packet (%d bytes) to iNIC\n", firmware->seq, len);
+//		printk("Send %d packet (%d bytes) to iNIC\n", firmware->seq, len);
 		firmware->seq++;
 		total += len;
 //		msleep (10);
@@ -2715,7 +2715,7 @@ void IoctlRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 	}
 
-	wake_up_interruptible(&pAd->RaCfgObj.waitQH);
+//	wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 }
 
 void FeedbackRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
@@ -3078,8 +3078,14 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		case RACFG_CMD_TYPE_SYNC         | RACFG_CMD_TYPE_RSP_FLAG:
 		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
 		{
-			// TODO : Processing mac message
-			dev_kfree_skb(skb);
+			HndlTask new_task = {NULL, skb};
+			if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
+				dev_kfree_skb(skb);
+			} else {
+				kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
+				pAd->RaCfgObj.wait_completed++;
+				wake_up_interruptible(&pAd->RaCfgObj.waitQH);
+			}
 			break;
 		}
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:

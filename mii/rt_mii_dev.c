@@ -276,8 +276,11 @@ static int mii_open(struct net_device *dev) {
 	}
 
 	printk("iNIC Open %s\n", dev->name);
-
-	// to start racfg_frame_handle()
+	if(pAd->RaCfgObj.InterfaceNumber == 0){
+		mii_hardware_reset(0);
+		msleep(1000);
+		mii_hardware_reset(1);
+	}// to start racfg_frame_handle()
 	RaCfgInterfaceOpen(pAd);
 
 	// TODO : Doesn't set enywhere
