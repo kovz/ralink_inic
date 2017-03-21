@@ -74,7 +74,7 @@ extern s32 MC_CardIrq[MAX_NUM_OF_MULTIPLE_CARD];
 
 
 /* hardware minimum and maximum for a single frame's data payload */
-#define RLK_INIC_MIN_MTU		60	/* TODO: allow lower, but pad */
+#define RLK_INIC_MIN_MTU		64	/* TODO: allow lower, but pad */
 #define RLK_INIC_MAX_MTU		1536
 
 #define MAC_ADDR_LEN         6
