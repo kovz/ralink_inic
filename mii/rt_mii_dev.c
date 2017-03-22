@@ -102,67 +102,60 @@ static const struct net_device_ops Netdev_Ops[CONCURRENT_CARD_NUM] =
 };
 
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
-//static struct sk_buff *(*org_br_handle_frame)(struct net_bridge_port *p, struct sk_buff *skb);
-//
-//static struct sk_buff *my_br_handle_frame(struct net_bridge_port *p,
-//		struct sk_buff *skb){
-//	iNIC_PRIVATE *pAd = gAdapter[0];
-//
-//#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-//	DispatchAdapter(&pAd, skb);
-//#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-//
-//	ASSERT(skb);
-//
-//	if ((skb->protocol == 0xFFFF) && pAd) {
-//
-//		if (racfg_frame_handle(pAd, skb)) {
-//			return NULL;
-//		}
-//		return skb;
-//	} else {
-//		// check vlan and in-band, then remove vlan tag
-//		if ((((htons(skb->protocol) >> 8) & 0xff) == 0x81)
-//				&& (*((u16 *) (&skb->data[2])) == htons(0xFFFF)) && pAd) {
-//			// Remove VLAN Tag 4 bytes
-//			skb->data -= ETH_HLEN;
-//			memmove(&skb->data[4], &skb->data[0], 12);
-//
-//			// skip ETH_HLEN + VLAN Tag 4 bytes
-//			skb->data += (4 + ETH_HLEN);
-//			skb->len -= (4 + ETH_HLEN);
-//
-//			// reset protocol to in-band frame
-//			skb->protocol = htons(0xFFFF);
-//
-//#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-//
-//			DispatchAdapter(&pAd, skb);
-//			if (pAd == NULL) {
-//				printk("Warnning: DEFINE_BR_HANDLE_FRAME pAd is NULL\n");
-//				return skb;
-//			}
-//
-//#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-//
-//			if (racfg_frame_handle(pAd, skb)) {
-//				return NULL;
-//			}
-//			return skb;
-//		}
-//
-//		if (org_br_handle_frame) {
-//			return org_br_handle_frame(p, skb);
-//			/*
-//			 printk("bridge recv: %04x, ret=%d, (handled=%d, not handled=%d)\n",
-//			 skb->protocol, ret, NULL, skb);
-//			 */
-//		}
-//		dev_kfree_skb(skb);
-//		return NULL;
-//	}
-//	return skb;
-//}
+static br_should_route_hook_t *org_br_should_route_hook;
+
+static int my_br_handle_frame(struct sk_buff *skb){
+	iNIC_PRIVATE *pAd = gAdapter[0];
+	br_should_route_hook_t *rhook;
+#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
+	DispatchAdapter(&pAd, skb);
+#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+
+	ASSERT(skb);
+
+	if ((skb->protocol == 0xFFFF) && pAd) {
+
+		if (racfg_frame_handle(pAd, skb)) {
+			return RX_HANDLER_CONSUMED;
+		}
+		return RX_HANDLER_PASS;
+	} else {
+		// check vlan and in-band, then remove vlan tag
+		if ((((htons(skb->protocol) >> 8) & 0xff) == 0x81)
+				&& (*((u16 *) (&skb->data[2])) == htons(0xFFFF)) && pAd) {
+			// Remove VLAN Tag 4 bytes
+			skb->data -= ETH_HLEN;
+			memmove(&skb->data[4], &skb->data[0], 12);
+
+			// skip ETH_HLEN + VLAN Tag 4 bytes
+			skb->data += (4 + ETH_HLEN);
+			skb->len -= (4 + ETH_HLEN);
+
+			// reset protocol to in-band frame
+			skb->protocol = htons(0xFFFF);
+
+#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
+
+			DispatchAdapter(&pAd, skb);
+			if (pAd == NULL) {
+				printk("Warnning: DEFINE_BR_HANDLE_FRAME pAd is NULL\n");
+				return RX_HANDLER_PASS;
+			}
+
+#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+
+			if (racfg_frame_handle(pAd, skb)) {
+				return RX_HANDLER_CONSUMED;
+			}
+			return RX_HANDLER_PASS;
+		}
+		rhook = rcu_dereference(org_br_should_route_hook);
+		if (rhook) {
+			return (*rhook)(skb);
+		}
+	}
+	return RX_HANDLER_PASS;
+}
 #endif
 
 /*
@@ -227,16 +220,16 @@ static struct packet_type arp_packet_type = { .type = __constant_htons(0x0806),
 
 void racfg_inband_hook_init(iNIC_PRIVATE *pAd) {
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
-// TODO : Add bridge handling
-//	if (br_should_route_hook) {
-//		org_br_handle_frame = br_route_hook;
-//		printk("Org bridge hook = %p\n", org_br_handle_frame);
-//		br_should_route_hook = my_br_handle_frame;
-//		printk("Change bridge hook = %p\n", br_should_route_hook);
-//	} else {
-//		printk(
-//				"Warning! Bridge module not init yet. Please modprobe bridge at first if you want to use bridge.\n");
-//	}
+	org_br_should_route_hook = rcu_dereference(br_should_route_hook);
+	if (org_br_should_route_hook) {
+		printk("Org bridge hook = %p\n", br_should_route_hook);
+		RCU_INIT_POINTER(br_should_route_hook,
+				(br_should_route_hook_t *)my_br_handle_frame);
+		printk("Change bridge hook = %p\n", br_should_route_hook);
+	} else {
+		printk(
+				"Warning! Bridge module not init yet. Please modprobe bridge at first if you want to use bridge.\n");
+	}
 #endif
 	in_band_packet_type.dev = pAd->master; /* hook only on mii master device */
 	dev_add_pack(&in_band_packet_type);
@@ -256,10 +249,10 @@ void racfg_inband_hook_cleanup(void) {
 	dev_remove_pack(&arp_packet_type);
 #endif
 #if defined(CONFIG_BRIDGE) || defined (CONFIG_BRIDGE_MODULE)
-//	if (org_br_handle_frame) {
-//		br_should_route_hook = org_br_handle_frame;
-//		printk("Restore bridge hook = %p\n", br_should_route_hook);
-//	}
+	if (rcu_dereference(org_br_should_route_hook)) {
+		RCU_INIT_POINTER(br_should_route_hook, org_br_should_route_hook);
+		printk("Restore bridge hook = %p\n", br_should_route_hook);
+	}
 #endif
 }
 
