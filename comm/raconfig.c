@@ -1401,18 +1401,15 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 	unsigned char buff[CRC_HEADER_LEN];
 
 	if (!firmware->fw_data)	return;
-	if(firmware->r_off < firmware->size){
+	if(firmware->r_off <= firmware->size){
 		rest = firmware->size - firmware->r_off;
 		len = rest < MAX_FEEDBACK_LEN ? rest : MAX_FEEDBACK_LEN;
 		memcpy(pAd->RaCfgObj.upload_buf, &firmware->fw_data[firmware->r_off], len);
 		firmware->r_off += len;
 	}
-	//len = read(fw_fd, buffer, MAX_FEEDBACK_LEN);
-	//len = firmware->f_op->read(firmware, pAd->RaCfgObj.upload_buf, MAX_FEEDBACK_LEN, &firmware->f_pos);
 
 	if (len > 0)
 	{
-		//DBGPRINT("(%d), len = %d\n", RaCfgObj.firmware.seq, len);
 		firmware->crc = crc32(firmware->crc, pAd->RaCfgObj.upload_buf, len);
 
 		if (len >= CRC_HEADER_LEN)
@@ -1421,19 +1418,13 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 			if (len < MAX_FEEDBACK_LEN)
 			{
 				unsigned char *pp = (char *)(pAd->RaCfgObj.upload_buf + len - CRC_HEADER_LEN);
-				int i = 0;
 				dev_info(&pAd->dev->dev, "CRC: %*ph\n", CRC_HEADER_LEN, &pAd->RaCfgObj.upload_buf[len - CRC_HEADER_LEN]);
-//				printk("\nCRC:");
-//				for (i = 0; i < CRC_HEADER_LEN; pp++, i++)
-//					printk("%02x ", *pp);
-//				printk("\n");
 			}
 		}
 		else
 		{
 			int slack = CRC_HEADER_LEN - len;
 			char *curr = buff;
-			//memcpy(curr, pAd->RaCfgObj.cmp_buf + MAX_FEEDBACK_LEN - slack, slack);
 			memcpy(curr, &pAd->RaCfgObj.cmp_buf[MAX_FEEDBACK_LEN - slack], slack);
 			curr += slack;
 			memcpy(curr, pAd->RaCfgObj.upload_buf, len);
@@ -1460,13 +1451,11 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 	}
 	mod_timer(&pAd->RaCfgObj.uploadTimer, jiffies + RetryTimeOut*HZ/1000);
 #endif
-		SendRaCfgCommand(pAd, 
+	SendRaCfgCommand(pAd,
 						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_RSP_FLAG,
 						 RACFG_CMD_BOOT_UPLOAD, len, firmware->seq, 0, 0, 0, pAd->RaCfgObj.upload_buf);
-//		printk("Send %d packet (%d bytes) to iNIC\n", firmware->seq, len);
 		firmware->seq++;
 		total += len;
-//		msleep (10);
 	}
 	else
 	{
@@ -1482,18 +1471,18 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 	}
 #endif
 
-#if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
-#ifdef PHASE_LOAD_CODE
-		if (!pAd->RaCfgObj.bLoadPhase)
-		{
-			SendRaCfgCommand(pAd, 
-						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_PASSIVE_MASK, 
-						 RACFG_CMD_BOOT_STARTUP, 0, 0, 0, 0, 0, NULL);
-			RaCfgCloseFile(pAd, firmware);
-			return;
-		}
-#endif
-#endif
+//#if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
+//#ifdef PHASE_LOAD_CODE
+//		if (!pAd->RaCfgObj.bLoadPhase)
+//		{
+//			SendRaCfgCommand(pAd,
+//						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_PASSIVE_MASK,
+//						 RACFG_CMD_BOOT_STARTUP, 0, 0, 0, 0, 0, NULL);
+//			RaCfgCloseFile(pAd, firmware);
+//			return;
+//		}
+//#endif
+//#endif
 		if (firmware->hdr.magic_no != 0x18140801)
 		{
 			printk("WARNING! %s has no crc record (magic_no=%04x),"
@@ -1523,8 +1512,6 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 		printk("===================================\n\n");
 
 		done:
-		//RaCfgObj.firmware.seq = 0;
-		//firmware->f_op->lseek(fp, 0, SEEK_SET);
 		DBGPRINT("Send STARTUP to %s\n", DRV_NAME);
 		SendRaCfgCommand(pAd, 
 						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_PASSIVE_MASK, 
@@ -1873,7 +1860,6 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 	if (!pProfile->fw_data) return;
 
 	memset(pAd->RaCfgObj.test_pool, 0, MAX_FEEDBACK_LEN);
-	//len = read(cfg_fd, RaCfgObj.test_pool, MAX_FEEDBACK_LEN);
 	if(pProfile->r_off < pProfile->size){
 		rest = pProfile->size - pProfile->r_off;
 		len = rest <= room_left ? rest : room_left;
@@ -2018,7 +2004,6 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 		if (pAd->RaCfgObj.bExtEEPROM)
 			RaCfgCloseFile(pAd, &pAd->RaCfgObj.ext_eeprom);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
-
 		_upload_firmware(pAd);
 	} 
 
@@ -2306,26 +2291,26 @@ static void RaCfgInitCfgAction(void * arg)
 	}
 #endif
 #if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
-#ifdef PHASE_LOAD_CODE
-	if (!pAd->RaCfgObj.bLoadPhase)
-	{
-#ifdef RETRY_PKT_SEND
-		// delete timer
-		if (pAd->RaCfgObj.uploadTimer.function)
+	#ifdef PHASE_LOAD_CODE
+		if (!pAd->RaCfgObj.bLoadPhase)
 		{
-			del_timer_sync(&pAd->RaCfgObj.uploadTimer);
-			pAd->RaCfgObj.uploadTimer.function = NULL;
-			pAd->RaCfgObj.uploadTimer.data = 0;
+		#ifdef RETRY_PKT_SEND
+			// delete timer
+			if (pAd->RaCfgObj.uploadTimer.function)
+			{
+				del_timer_sync(&pAd->RaCfgObj.uploadTimer);
+				pAd->RaCfgObj.uploadTimer.function = NULL;
+				pAd->RaCfgObj.uploadTimer.data = 0;
+			}
+		#endif
+			_upload_profile(pAd);
 		}
+		else
+	#endif
 #endif
-		_upload_profile(pAd);
-	}
-	else
-#endif
-#endif
-		_upload_firmware(pAd);
-
+			_upload_firmware(pAd);
 }
+
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
 static void rlk_inic_check_mac(iNIC_PRIVATE *pAd)
 {
@@ -2412,14 +2397,16 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 		rc = wait_event_interruptible_timeout(pAd->RaCfgObj.waitQH, !kfifo_is_empty(&pAd->RaCfgObj.wait_fifo), timeout);
 //#endif
 //		}
-		if(rc == -ERESTARTSYS)
+		if(rc == -ERESTARTSYS){
+			DBGPRINT("Interrupted");
 			break;
-		else if(rc == 0){
+		} else if(rc == 0) {
 //			DBGPRINT("Back Log FIFO is empty");
 			printk("timeout(%d secs): cmd=%04x no response\n", secs, cmd);
 			status = -EFAULT;
 			return status;
 		}
+
 		RTMP_SEM_LOCK(&pAd->RaCfgObj.waitLock);
 		if(!kfifo_get(&pAd->RaCfgObj.wait_fifo, &curr_task)){
 			DBGPRINT("Unexpected empty wait_fifo");
@@ -2481,6 +2468,7 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 			switch (command_id)
 			{
 			case RACFG_CMD_GET_MAC:
+				printk("RACFG_CMD_GET_MAC, len: %i \n", len);
 				if (len == 18)
 				{
 							rlk_inic_set_mac(pAd, payload);
@@ -2704,14 +2692,14 @@ int RaCfgWaitSyncRsp(iNIC_PRIVATE *pAd, u16 cmd, u16 cmd_seq, struct iwreq *wrq,
 
 void IoctlRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 {
-	//printk("Enqueu IOCTL resp, queue size=%d\n", pAd->RaCfgObj.waitQueue.num);
+//	printk("Enqueu IOCTL resp, queue size=%d\n", pAd->RaCfgObj.waitQueue.num);
 
 	HndlTask new_task = {NULL, skb};
 	if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
 		dev_kfree_skb(skb);
 	} else {
 		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
-		pAd->RaCfgObj.wait_completed++;
+//		pAd->RaCfgObj.wait_completed++;
 		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 	}
 
@@ -2775,18 +2763,18 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		{
 			DBGPRINT("RACFG_CMD_BOOT_NOTIFY\n");
 
-#ifdef CONFIG_CONCURRENT_INIC_SUPPORT 		
+	#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 			new_task.func = RaCfgConcurrentOpenAction;
-#else
+	#else
 			new_task.func = RaCfgOpenAction;
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+	#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 			kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
 			wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 			bDropMultiBootNotify = 1;
 		}
 #else
-#if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
-#ifdef PHASE_LOAD_CODE
+	#if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
+		#ifdef PHASE_LOAD_CODE
 		    if (pAd->RaCfgObj.bLoadPhase)
 		    {
 			    pAd->RaCfgObj.dropNotifyCount++;
@@ -2797,14 +2785,14 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			    }	
 		    }
             pAd->RaCfgObj.dropNotifyCount = 0;
-#endif
-#endif
+		#endif
+	#endif
 		DBGPRINT("RACFG_CMD_BOOT_NOTIFY\n");
-#ifdef CONFIG_CONCURRENT_INIC_SUPPORT 		
+	#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 			new_task.func = RaCfgConcurrentOpenAction;
-#else
+	#else
 			new_task.func = RaCfgOpenAction;
-#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
+	#endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 				kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
 				wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 #endif
@@ -2847,12 +2835,12 @@ static void RaCfgCommandHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 	case RACFG_CMD_BOOT_STARTUP:
 		DBGPRINT("RACFG_CMD_BOOT_STARTUP\n");
 #if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
-#ifdef PHASE_LOAD_CODE
+	#ifdef PHASE_LOAD_CODE
 			if (pAd->RaCfgObj.bLoadPhase)
 				pAd->RaCfgObj.bLoadPhase = FALSE;
 			else
 				pAd->RaCfgObj.bLoadPhase = TRUE;
-#endif
+	#endif
 #endif
 		dev_kfree_skb(skb);
 		break;
@@ -2972,11 +2960,13 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		if(((command_type&0x7FFF) == RACFG_CMD_TYPE_BOOTSTRAP)||
 				(((command_type&0x7FFF) == RACFG_CMD_TYPE_SYNC)&&(command_id == RACFG_CMD_GET_MAC)))
 		{
+			//DBGPRINT("Check for ignore RACFG_CMD_GET_MAC\n");
 			// TODO : early access to gAdapter[1]
 			//if((!gAdapter[0]->RaCfgObj.flg_is_open)&&!(gAdapter[1]->RaCfgObj.flg_is_open))
 			if((gAdapter[0] == NULL || gAdapter[1] == 0 ) ||
 					(!gAdapter[0]->RaCfgObj.flg_is_open && !gAdapter[1]->RaCfgObj.flg_is_open))
 			{
+				DBGPRINT("Ignored command_type: %x, command_id: %x \n", command_type, command_id);
 				dev_kfree_skb(skb);
 				return TRUE;
 			}				
@@ -2992,6 +2982,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				if (!pAd->RaCfgObj.MBSSID[0].MSSIDDev || !pAd->RaCfgObj.flg_is_open)
 #endif
 				{
+					//DBGPRINT("Error: MSSIDDev: %x, flg_is_open: %x", pAd->RaCfgObj.MBSSID[0].MSSIDDev, pAd->RaCfgObj.flg_is_open);
 #ifdef 	CONFIG_CONCURRENT_INIC_SUPPORT	
 					/*
 					 * The system heart beat timer is on the main interface.
@@ -3024,12 +3015,14 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 #if (CONFIG_INF_TYPE==INIC_INF_TYPE_MII)
 		if ((syncmiimac ==0)&&(pAd->RaCfgObj.bGetMac && !pAd->RaCfgObj.bRestartiNIC))
 		{
+			//DBGPRINT("Error: syncmiimac: %x bGetMac: %x bRestartiNIC: %x", syncmiimac, pAd->RaCfgObj.bGetMac, pAd->RaCfgObj.bRestartiNIC);
 			u8  *pSrcBufVA;
 			pSrcBufVA = skb->data-14;
 			if (memcmp(pSrcBufVA, pAd->master->dev_addr, 6) ||
 					memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
 			{
 				dev_kfree_skb(skb);
+				DBGPRINT("Fail first compare mac address");
 				return TRUE;
 			}
 		}
@@ -3037,6 +3030,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 #endif
 			if (pAd->RaCfgObj.bGetMac && !pAd->RaCfgObj.bRestartiNIC)
 			{
+				//DBGPRINT("Error: bGetMac: %x bRestartiNIC: %x", pAd->RaCfgObj.bGetMac, pAd->RaCfgObj.bRestartiNIC);
 				u8  *pSrcBufVA;
 
 				pSrcBufVA = skb->data-14;
@@ -3050,11 +3044,11 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 						memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
 				{
 					dev_kfree_skb(skb);
+					DBGPRINT("Fail second compare mac address");
 					return TRUE;
 				}
 			}
 #endif
-
 		switch (command_type)
 		{
 		case RACFG_CMD_TYPE_ASYNC | RACFG_CMD_TYPE_RSP_FLAG:
@@ -3069,25 +3063,17 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 				RaCfgFifoRestart(pAd);
 			}
 			dev_kfree_skb(skb);
-		}
-		else
+		}else
 		{
 			FeedbackRspHandler(pAd, skb);
 		}
 		break;
-		case RACFG_CMD_TYPE_SYNC         | RACFG_CMD_TYPE_RSP_FLAG:
+		case RACFG_CMD_TYPE_SYNC | RACFG_CMD_TYPE_RSP_FLAG:
 		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
-		{
-			HndlTask new_task = {NULL, skb};
-			if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
-				dev_kfree_skb(skb);
-			} else {
-				kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
-				pAd->RaCfgObj.wait_completed++;
-				wake_up_interruptible(&pAd->RaCfgObj.waitQH);
-			}
-			break;
-		}
+			dev_kfree_skb(skb);
+		else
+			FeedbackRspHandler(pAd, skb);
+		break;
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_IWREQ_STRUC  | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_IW_HANDLER   | RACFG_CMD_TYPE_RSP_FLAG:
@@ -3596,8 +3582,8 @@ static int netdev_event(
 						dev_close(dev);
 					}
 				}
-#endif
-#endif
+#endif // MII_SLAVE_STANDALONE
+#endif // CONFIG_INF_TYPE==INIC_INF_TYPE_MII
 
 
 		return NOTIFY_OK;
@@ -4059,6 +4045,7 @@ void DispatchAdapter(iNIC_PRIVATE **ppAd, struct sk_buff *skb)
 		}
 		else if((((command_type&0x7FFF) == RACFG_CMD_TYPE_SYNC)&&(command_id == RACFG_CMD_GET_MAC)))
 		{
+			//DBGPRINT("Got MAC CMD\n");
 			int i;
 			for(i=0;i<2;i++)
 			{
@@ -4067,6 +4054,7 @@ void DispatchAdapter(iNIC_PRIVATE **ppAd, struct sk_buff *skb)
 					if(gAdapter[i]->RaCfgObj.flg_is_open)
 					{
 						*ppAd = gAdapter[i];
+						//DBGPRINT("Redirected to %i adapter\n", i);
 						break;
 					}
 				}

@@ -29,18 +29,22 @@
 #endif
 
 #ifndef INT32
-#define INT32        int
+	#define INT32        int
 #endif
+
 #ifndef UINT32
-#define UINT32       unsigned int
+	#define UINT32       unsigned int
 #endif
+
 #define INIC_INFNAME			"ra"
 #define FIRMWARE_PATH "iNIC/" CHIP_NAME INTERFACE "/"
+
 #if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
-#ifdef PHASE_LOAD_CODE
-#define PHASE_FIRMWARE			FIRMWARE_PATH "iNIC.bin"
+	#ifdef PHASE_LOAD_CODE
+		#define PHASE_FIRMWARE			FIRMWARE_PATH "iNIC.bin"
+	#endif
 #endif
-#endif
+
 #define AP_FIRMWARE				FIRMWARE_PATH "iNIC_ap.bin"
 #define AP_PROFILE				FIRMWARE_PATH "iNIC_ap.dat"
 #define AP_CONCURRENT_PROFILE 	FIRMWARE_PATH "iNIC_ap1.dat"
@@ -212,28 +216,11 @@ typedef spinlock_t RTMP_SPIN_LOCK;
 typedef void (*PRaCfgFunc)(uintptr_t);
 typedef void (*pHndlFunc)(void*);
 
-typedef struct _racfg_task
-{
-	PRaCfgFunc func;
-    uintptr_t arg;
-} RaCfgTask;
-
 typedef struct _hndl_task
 {
 	pHndlFunc func;
     void * arg;
 } HndlTask;
-
-typedef struct _racfg_queue
-{
-    char name[32];
-	u32 num;
-	u32 head;
-	u32 tail;
-	RTMP_SPIN_LOCK lock;
-	RaCfgTask entry[MAX_LEN_OF_RACFG_QUEUE];
-} RaCfgQueue;
-
 
 typedef struct m_file_handle
  {
@@ -276,7 +263,7 @@ typedef struct _VIRTUAL_ADAPTER
 //#define TEST_BOOT_RECOVER 1
 
 #ifdef RETRY_PKT_SEND
-#define RetryTimeOut 1000    // default 50ms, better set timeout >= 50ms
+#define RetryTimeOut 60    // default 50ms, better set timeout >= 50ms
 #define FwRetryCnt	10		 // retry counts for fw upload
 #define InbandRetryCnt	3	// retry counts for inband
 
