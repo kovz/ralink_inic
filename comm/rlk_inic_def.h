@@ -24,6 +24,7 @@
 #define INIC_INF_TYPE_MII 1
 #define INIC_INF_TYPE_USB 2
 
+
 #ifndef SET_MODULE_OWNER
 #define SET_MODULE_OWNER(dev) do {} while(0)
 #endif
@@ -221,6 +222,7 @@ typedef struct _hndl_task
 	pHndlFunc func;
     void * arg;
 } HndlTask;
+
 
 typedef struct m_file_handle
  {
@@ -446,7 +448,7 @@ extern CONCURRENT_OBJECT ConcurrentObj;
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
 #if (CONFIG_INF_TYPE == INIC_INF_TYPE_MII)
-extern iNIC_PRIVATE *gAdapter[2];
+extern iNIC_PRIVATE *gAdapter[CONCURRENT_CARD_NUM];
 #endif
 
 
