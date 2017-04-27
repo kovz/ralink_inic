@@ -12,14 +12,17 @@ busybox devmem 0x1e10b140 32 0x3205 # PHY_ADDR_5 mdio_base + (0x54 -(portnum*4))
 sleep 10
 
 /sbin/insmod /tmp/inic/rt3883_iNIC.ko mode=ap miimaster=eth0.1 mac=4c:09:d4:16:d8:88 mac2=4c:09:d4:16:d8:89 reset_gpio=483
-ip link set ra0 up
+ip link set ra00_0 up
 
 After that, the board is is initialized and waits for some more instructions via iwpriw / iwconfig commands.
-ra0 is for 5G band
-ra1 is for 2.4G band
+ra00_0 is for 5G band
+ra01_0 is for 2.4G band
+
+ra00_1 is used for guest networks
+ra01_1 is used for guest networks
 
 E.g.:
-iwpriv ra1 set Channel=11
-iwpriv ra1 set SSID="MySSID"
-iwpriv ra1 set RadioOn=1
+iwpriv ra01_0 set Channel=11
+iwpriv ra01_0 set SSID="MySSID"
+iwpriv ra01_0 set RadioOn=1
 
