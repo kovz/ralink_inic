@@ -2527,11 +2527,11 @@ void FeedbackRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 	// Will be dequeued by original IOCTL thread, not RaCfgTaskThread
 	//printk("Enqueue Feedback resp, queue size=%d..\n", pAd->RaCfgObj.taskQueue.num);
 	HndlTask new_task = {NULL, skb};
-	if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
+	if(kfifo_is_full(&pAd->RaCfgObj.task_fifo)){
 		dev_kfree_skb(skb);
 	} else {
-		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
-		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
+		kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+		wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 	}
 }
 
