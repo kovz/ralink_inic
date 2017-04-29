@@ -2897,10 +2897,16 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		}
 		break;
 		case RACFG_CMD_TYPE_SYNC | RACFG_CMD_TYPE_RSP_FLAG:
-		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
+		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC)){
 			dev_kfree_skb(skb);
-		else
-			FeedbackRspHandler(pAd, skb);
+		}
+		else{
+			if (command_id == RACFG_CMD_GET_MAC){
+				IoctlRspHandler(pAd, skb);
+			}else{
+				FeedbackRspHandler(pAd, skb);
+			}
+		}
 		break;
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_IWREQ_STRUC  | RACFG_CMD_TYPE_RSP_FLAG:
