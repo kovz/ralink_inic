@@ -2901,11 +2901,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			dev_kfree_skb(skb);
 		}
 		else{
-			if (command_id == RACFG_CMD_GET_MAC){
-				IoctlRspHandler(pAd, skb);
-			}else{
-				FeedbackRspHandler(pAd, skb);
-			}
+			IoctlRspHandler(pAd, skb);
 		}
 		break;
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
