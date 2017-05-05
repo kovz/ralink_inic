@@ -71,6 +71,8 @@ static int mii_close(struct net_device *dev);
 static int mii_send_packet(struct sk_buff *skb, struct net_device *dev);
 static struct net_device_stats *mii_get_stats(struct net_device *netdev);
 
+extern int init_flag;
+
 static int mii_hardware_reset(int op) {
 	DBGPRINT("-----> %s\n", __FUNCTION__);
 	gpio_set_value(reset_gpio, op);
@@ -269,23 +271,19 @@ static int mii_open(struct net_device *dev) {
 	}
 
 	printk("iNIC Open %s\n", dev->name);
-	if(pAd->RaCfgObj.InterfaceNumber == 0){
+	if(pAd->RaCfgObj.InterfaceNumber == 0 && init_flag == 0){
 		mii_hardware_reset(0);
 		msleep(1000);
 		mii_hardware_reset(1);
 	}// to start racfg_frame_handle()
 	RaCfgInterfaceOpen(pAd);
 
-	// TODO : Doesn't set enywhere
-//	if (netif_msg_ifup(pAd))
-//		printk(KERN_DEBUG "%s: enabling interface\n", dev->name);
-
 	netif_carrier_on(dev);
 	netif_start_queue(dev);
 
-#ifndef NM_SUPPORT
+//#ifndef NM_SUPPORT
 	RaCfgSetUp(pAd, dev);
-#endif
+//#endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	ConcurrentObj.CardCount++;
@@ -306,14 +304,16 @@ static int mii_close(struct net_device *dev) {
 	}
 #endif // WOWLAN_SUPPORT //
 
+	SetRadioOn(pAd, 0);
+
 	netif_stop_queue(dev);
 	netif_carrier_off(dev);
 
 	pAd->RaCfgObj.bExtEEPROM = FALSE;
 	DBGPRINT("iNIC Closed\n");
-#ifndef NM_SUPPORT
+//#ifndef NM_SUPPORT
 	RaCfgStateReset(pAd);
-#endif
+//#endif
 	RaCfgInterfaceClose(pAd);
 
 	return 0;
@@ -489,13 +489,15 @@ static int __init rlk_inic_init(void) {
 	pAd->dev = dev;
 	pAd->master = master;
 
+	DBGPRINT("%s: Master at 0x%lx, "
+			"%02x:%02x:%02x:%02x:%02x:%02x\n", pAd->master->name, pAd->master->base_addr,
+			pAd->master->dev_addr[0], pAd->master->dev_addr[1], pAd->master->dev_addr[2],
+			pAd->master->dev_addr[3], pAd->master->dev_addr[4], pAd->master->dev_addr[5]);
+
 #ifdef NM_SUPPORT
 	pAd->hardware_reset = mii_hardware_reset;
 #endif
-//	spin_lock_init(&pAd->lock);
 	dev->netdev_ops = &Netdev_Ops[0];
-
-	//dev->weight             = 64;	/* arbitrary? from NAPI_HOWTO.txt. */
 
 	for (i = 0; i < 32; i++) {
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
@@ -562,9 +564,6 @@ static int __init rlk_inic_init(void) {
 		bridge = 1;
 	}
 #endif
-//#ifdef NM_SUPPORT
-//	RaCfgSetUp(pAd, dev);
-//#endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	dev2 = alloc_etherdev(sizeof(iNIC_PRIVATE));
@@ -586,7 +585,6 @@ static int __init rlk_inic_init(void) {
 #ifdef NM_SUPPORT
 	pAd2->hardware_reset = NULL;
 #endif
-//	spin_lock_init(&pAd2->lock);
 	dev2->netdev_ops = &Netdev_Ops[1];
 	for (i = 0; i < 32; i++) {
 		snprintf(name, sizeof(name), "%s01_%d", INIC_INFNAME, i);
@@ -622,11 +620,6 @@ static int __init rlk_inic_init(void) {
 			dev2->dev_addr[3], dev2->dev_addr[4], dev2->dev_addr[5]);
 
 	dev2->priv_flags = INT_MAIN;
-
-#ifdef NM_SUPPORT 
-	RaCfgSetUp(pAd, dev);
-	RaCfgSetUp(pAd2, dev2);
-#endif
 
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 

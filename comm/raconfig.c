@@ -34,13 +34,6 @@ inline static void hardware_reset(iNIC_PRIVATE *pAd, int op)
 /*
  * Local Functions
  */
-//static int OpenRaCfgSocket(void);
-//static void RaCfgMasterClose(int sig);
-//static struct file *OpenRLK_INICFirmware(u8 *path);
-//static struct file *OpenRLK_INICProfile(u8 *path);
-//static void RcvRaCfgHandler(int sig);
-//static void SendRaCfgCommand(iNIC_PRIVATE *pAd, u16 cmd_type, u16 cmd_id, u16 len, u16 seq, u8 *data);
-
 #ifdef MULTIPLE_CARD_SUPPORT
 // record whether the card in the card list is used in the card file
 u8  MC_CardUsed[MAX_NUM_OF_MULTIPLE_CARD];
@@ -56,13 +49,6 @@ CONCURRENT_OBJECT ConcurrentObj;
 
 
 static void send_racfg_cmd(iNIC_PRIVATE *pAd, char *, int);
-
-//static int  RaCfgEnqueue(iNIC_PRIVATE *pAd, RaCfgQueue *, struct semaphore *, PRaCfgFunc func, uintptr_t arg);
-//static uintptr_t RaCfgDequeue(iNIC_PRIVATE *pAd, RaCfgQueue *, struct semaphore *);
-//static int  RaCfgQueueFull(RaCfgQueue  *queue);
-//static int  RaCfgQueueEmpty(RaCfgQueue *queue);
-//static void RaCfgQueueInit(RaCfgQueue  *queue, char *name);
-//static void RaCfgQueueReset(RaCfgQueue *queue, struct semaphore *);
 
 static int  RaCfgTaskThread(void *arg);
 static int  RaCfgBacklogThread(void *arg);
@@ -365,7 +351,7 @@ void RaCfgInit(iNIC_PRIVATE *pAd, struct net_device *dev, char *conf_mac, char *
 		rlk_inic_set_mac(pAd, conf_mac);
 	}
 
-	pAd->RaCfgObj.bRestartiNIC = FALSE;
+	//pAd->RaCfgObj.bRestartiNIC = FALSE;
 
 	pAd->RaCfgObj.wait_completed = 0;
 	init_waitqueue_head(&pAd->RaCfgObj.waitQH);
@@ -648,11 +634,10 @@ void RaCfgSetUp(iNIC_PRIVATE *pAd, struct net_device *dev)
 	int i;
 
 	printk("Op mode = %d\n", pAd->RaCfgObj.opmode);
-
 #if 0 //def CONFIG_RT2880_INIC_MII
 	dev_change_flags(pAd->master, pAd->master->flags | IFF_PROMISC);
+	dev_change_flags(pAd->dev, pAd->dev->flags | IFF_PROMISC);
 #endif
-
 	if (pAd->RaCfgObj.opmode)
 	{
 		for (i=0; i<MAX_MBSSID_NUM; i++)
@@ -663,6 +648,7 @@ void RaCfgSetUp(iNIC_PRIVATE *pAd, struct net_device *dev)
 	// TODO : bug in read second profile gAdapter[1] non initialized
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 	/* After the first time opening, read all profile to setting attribute*/
+	printk("ConcurrentObj.CardCount=%d\n", ConcurrentObj.CardCount);
 	if(ConcurrentObj.CardCount == 0)
 	{
 		for(i=0; i<CONCURRENT_CARD_NUM; i++)
@@ -700,6 +686,7 @@ void RaCfgSetUp(iNIC_PRIVATE *pAd, struct net_device *dev)
 		}
 #endif // MESH_SUPPORT //
 
+		printk("rlk_inic_mbss_init (pAd->RaCfgObj.BssidNum=%d)\n",pAd->RaCfgObj.BssidNum);
 		if (pAd->RaCfgObj.BssidNum > 1)
 		{
 			rlk_inic_mbss_init(dev, pAd); 
@@ -772,20 +759,25 @@ static int get_mac_from_inic(iNIC_PRIVATE *pAd)
 {
 	int ret = 0;
 
+	printk("ConcurrentObj.CardCount=%d init_flag=%d\n", ConcurrentObj.CardCount, init_flag);
 	if (init_flag) {
 		pAd->RaCfgObj.bGetMac = TRUE;
 		pAd->RaCfgObj.fw_upload_counter = 0;
 		return ret;
 	}
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-	if(ConcurrentObj.CardCount== 0)
+	if(ConcurrentObj.CardCount== 0){
 #endif // #ifdef CONFIG_CONCURRENT_INIC_SUPPORT //		
 	printk("Wait for boot done...\n");
 	pAd->RaCfgObj.bGetMac = FALSE;
+#ifdef CONFIG_CONCURRENT_INIC_SUPPORT
+	}
+#endif
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
-	if(ConcurrentObj.CardCount== 0)
-#endif // #ifdef CONFIG_CONCURRENT_INIC_SUPPORT //		
+	if(ConcurrentObj.CardCount== 0){
+#endif // #ifdef CONFIG_CONCURRENT_INIC_SUPPORT //
+	printk("Call RaCfgWaitSyncRsp\n");
 	ret = RaCfgWaitSyncRsp(pAd, RACFG_CMD_GET_MAC, 0, NULL, NULL, GET_MAC_TIMEOUT); // 1 hours = infinitely
 	if (ret)
 	{
@@ -797,13 +789,14 @@ static int get_mac_from_inic(iNIC_PRIVATE *pAd)
 	}
 	else
 	{
+		printk("OK! Got target's MAC address, boot done.\n");
 		pAd->RaCfgObj.bGetMac = TRUE;
 		pAd->RaCfgObj.fw_upload_counter = 0;
 		
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 		/* All interface is radio off after iNIC boot. 
-		 * Set radio on when getting MAC. */	
-		SetRadioOn(pAd, 1); 
+		 * Set radio on when getting MAC. */
+//		SetRadioOn(pAd, 1);
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 
 		
@@ -811,6 +804,7 @@ static int get_mac_from_inic(iNIC_PRIVATE *pAd)
 		we_fw_uploaded(pAd);
 #endif
 		init_flag = 1;
+	}
 	}
 	return ret;
 }
@@ -1174,189 +1168,6 @@ void RaCfgWriteFile(iNIC_PRIVATE *pAd, FWHandle *fh, char *buff, int len)
 //	fh->fp->f_op->write(fh->fp, buff, len, &fh->fp->f_pos);
 }
 
-/*! \brief  Initialize The RaCfgQueue
- *  \param  *Queue     The RaCfg Queue
- *  \pre
- *  \post
- *  \note   Because this is done only once (at the init stage), no need to be locked
- */
-//static void RaCfgQueueInit(RaCfgQueue *queue, char *name)
-//{
-//	int i;
-//
-//	RTMP_SEM_INIT(&queue->lock);
-//
-//	strncpy(queue->name, name, sizeof(queue->name)-1);
-//	queue->name[sizeof(queue->name)-1]='\0';
-//	queue->num  = 0;
-//	queue->head = 0;
-//	queue->tail = 0;
-//
-//	for (i = 0; i < MAX_LEN_OF_RACFG_QUEUE; i++)
-//	{
-//		queue->entry[i].func = NULL;
-//		queue->entry[i].arg  = 0;
-//	}
-//}
-
-/*! \brief   The destructor of RaCfg Queue
- *  \param 
- *  \return
- *  \pre
- *  \post
- *  \note   Clear RaCfg Queue, Set queue->num to Zero.
- */
-//static void RaCfgQueueReset(RaCfgQueue *queue, struct semaphore *sem)
-//{
-//	int i;
-//
-//	RTMP_SEM_LOCK(&(queue->lock));
-//	queue->num  = 0;
-//	queue->head = 0;
-//	queue->tail = 0;
-//
-//	for (i = 0; i < MAX_LEN_OF_RACFG_QUEUE; i++)
-//	{
-//		queue->entry[i].func = NULL;
-//		queue->entry[i].arg  = 0;
-//	}
-//
-//	RTMP_SEM_UNLOCK(&(queue->lock));
-//
-//	if (sem)
-//	{
-//		// clear sem->count
-//		while (!down_trylock(sem));
-//	}
-//
-//}
-
-/*! \brief   Enqueue a task for other threads
- *  \param  *Func     The task pointer
- *  \param  arg       The task's arg
- *  \return  0 if enqueue is successful, 1 if the queue is full
- *  \pre
- *  \post
- *  \note    The arg has to be initialized
- */
-//static int RaCfgEnqueue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semaphore *sem, PRaCfgFunc func, uintptr_t arg)
-//{
-//	int tail;
-//
-//	if (RaCfgQueueFull(queue))
-//	{
-//		printk("RaCfgEnqueue: full (%d tasks pending in %s), task dropped.\n",
-//			   queue->num, queue->name);
-//		return 1;
-//	}
-//
-//	RTMP_SEM_LOCK(&(queue->lock));
-//	tail = queue->tail;
-//	queue->tail++;
-//	queue->num++;
-//	if (queue->tail == MAX_LEN_OF_RACFG_QUEUE)
-//	{
-//		queue->tail = 0;
-//	}
-//
-//	queue->entry[tail].func = func;
-//	queue->entry[tail].arg  = arg;
-//
-//	RTMP_SEM_UNLOCK(&(queue->lock));
-//
-//	if (sem) up(sem);
-//	return 0;
-//}
-
-/*! \brief   Dequeue a task from the RaCfg Queue, and execute it
- *  \param  *Elem     The task dequeued from RaCfgQueue
- *  \return  pointer to the queued argument
- *  \pre
- *  \post
-
- IRQL = DISPATCH_LEVEL
-
- */
-//static uintptr_t RaCfgDequeue(iNIC_PRIVATE *pAd, RaCfgQueue *queue, struct semaphore *sem)
-//{
-//	PRaCfgFunc task;
-//	uintptr_t arg = 0;
-//
-//	if (sem)
-//	{
-//		if (down_interruptible(sem) == -EINTR)
-//		{
-//			// Catch System Reset Signal
-//			printk("\n\nNote!! Signal caught, all threads broken...\n\n");
-//			pAd->RaCfgObj.threads_exit = 1;
-//			return arg;
-//		}
-//		else
-//		{
-//			if (pAd->RaCfgObj.threads_exit)
-//			{
-//				printk("ERROR! all threads has been exited!\n");
-//				return arg;
-//			}
-//
-//		}
-//	}
-//	if (queue->num == 0)
-//	{
-//		printk("ERROR! RaCfgDequeue while queue num=%d\n", queue->num);
-//		return 0;
-//	}
-//
-//
-//	RTMP_SEM_LOCK(&(queue->lock));
-//	task = queue->entry[queue->head].func;
-//	arg  = queue->entry[queue->head].arg;
-//	queue->num--;
-//	queue->head++;
-//	if (queue->head == MAX_LEN_OF_RACFG_QUEUE)
-//		queue->head = 0;
-//
-//	RTMP_SEM_UNLOCK(&(queue->lock));
-//
-//	if (!task) return arg;
-//
-//	task(arg);
-//	return 0;
-//}
-
-
-/*! \brief   test   if the RaCfg Queue is full
- *  \param   *queue The RaCfg Queue
- *  \return  1      if the queue is full, 0 otherwise
- *  \pre
- *  \post
- */
-//static int RaCfgQueueFull(RaCfgQueue *queue)
-//{
-//	int ans;
-//	RTMP_SEM_LOCK(&(queue->lock));
-//	ans = (queue->num == MAX_LEN_OF_RACFG_QUEUE ? 1 : 0);
-//	RTMP_SEM_UNLOCK(&(queue->lock));
-//	return ans;
-//}
-
-/*! \brief  test if the RaCfgQueue is empty
- *  \param  *queue    The RaCfgQueue
- *  \return 1 if the queue is empty, 0 otherwise
- *  \pre
- *  \post
- */
-//static int RaCfgQueueEmpty(RaCfgQueue *queue)
-//{
-//	int ans;
-//
-//	RTMP_SEM_LOCK(&(queue->lock));
-//	ans = (queue->num == 0 ? 1 : 0);
-//	RTMP_SEM_UNLOCK(&(queue->lock));
-//
-//	return ans;
-//}
-
 static ArgBox *GetArgBox(void)
 {
 	return kmalloc(sizeof(ArgBox), MEM_ALLOC_FLAG);
@@ -1400,7 +1211,10 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 	unsigned char *last_hdr = 0;
 	unsigned char buff[CRC_HEADER_LEN];
 
-	if (!firmware->fw_data)	return;
+	if (!firmware->fw_data){
+		printk("%s:%s:%d: No fw_data available.\n",__FILE__,__FUNCTION__,__LINE__);
+		return;
+	}
 	if(firmware->r_off <= firmware->size){
 		rest = firmware->size - firmware->r_off;
 		len = rest < MAX_FEEDBACK_LEN ? rest : MAX_FEEDBACK_LEN;
@@ -1451,8 +1265,8 @@ static void _upload_firmware(iNIC_PRIVATE *pAd)
 	}
 	mod_timer(&pAd->RaCfgObj.uploadTimer, jiffies + RetryTimeOut*HZ/1000);
 #endif
-	SendRaCfgCommand(pAd,
-						 RACFG_CMD_TYPE_BOOTSTRAP & RACFG_CMD_TYPE_RSP_FLAG,
+		SendRaCfgCommand(pAd, 
+						 RACFG_CMD_TYPE_BOOTSTRAP & /*RACFG_CMD_TYPE_RSP_FLAG*/ RACFG_CMD_TYPE_PASSIVE_MASK,
 						 RACFG_CMD_BOOT_UPLOAD, len, firmware->seq, 0, 0, 0, pAd->RaCfgObj.upload_buf);
 		firmware->seq++;
 		total += len;
@@ -1857,7 +1671,9 @@ static void _upload_profile(iNIC_PRIVATE *pAd)
 #endif // CONFIG_CONCURRENT_INIC_SUPPORT //
 	
 
-	if (!pProfile->fw_data) return;
+	if (!pProfile->fw_data){
+		printk("%s:%s:%d: No profile_data available.\n",__FILE__,__FUNCTION__,__LINE__);
+	}
 
 	memset(pAd->RaCfgObj.test_pool, 0, MAX_FEEDBACK_LEN);
 	if(pProfile->r_off < pProfile->size){
@@ -2699,7 +2515,7 @@ void IoctlRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		dev_kfree_skb(skb);
 	} else {
 		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
-//		pAd->RaCfgObj.wait_completed++;
+		pAd->RaCfgObj.wait_completed++;
 		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
 	}
 
@@ -2711,11 +2527,11 @@ void FeedbackRspHandler(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 	// Will be dequeued by original IOCTL thread, not RaCfgTaskThread
 	//printk("Enqueue Feedback resp, queue size=%d..\n", pAd->RaCfgObj.taskQueue.num);
 	HndlTask new_task = {NULL, skb};
-	if(kfifo_is_full(&pAd->RaCfgObj.wait_fifo)){
+	if(kfifo_is_full(&pAd->RaCfgObj.task_fifo)){
 		dev_kfree_skb(skb);
 	} else {
-		kfifo_in(&pAd->RaCfgObj.wait_fifo, &new_task, 1);
-		wake_up_interruptible(&pAd->RaCfgObj.waitQH);
+		kfifo_in(&pAd->RaCfgObj.task_fifo, &new_task, 1);
+		wake_up_interruptible(&pAd->RaCfgObj.taskQH);
 	}
 }
 
@@ -2960,11 +2776,7 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		if(((command_type&0x7FFF) == RACFG_CMD_TYPE_BOOTSTRAP)||
 				(((command_type&0x7FFF) == RACFG_CMD_TYPE_SYNC)&&(command_id == RACFG_CMD_GET_MAC)))
 		{
-			//DBGPRINT("Check for ignore RACFG_CMD_GET_MAC\n");
-			// TODO : early access to gAdapter[1]
-			//if((!gAdapter[0]->RaCfgObj.flg_is_open)&&!(gAdapter[1]->RaCfgObj.flg_is_open))
-			if((gAdapter[0] == NULL || gAdapter[1] == 0 ) ||
-					(!gAdapter[0]->RaCfgObj.flg_is_open && !gAdapter[1]->RaCfgObj.flg_is_open))
+			if(gAdapter[0] == NULL || !gAdapter[0]->RaCfgObj.flg_is_open )
 			{
 				DBGPRINT("Ignored command_type: %x, command_id: %x \n", command_type, command_id);
 				dev_kfree_skb(skb);
@@ -3021,6 +2833,22 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 			if (memcmp(pSrcBufVA, pAd->master->dev_addr, 6) ||
 					memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6))
 			{
+				DBGPRINT("pSrcBufVA=, "
+						"%02x:%02x:%02x:%02x:%02x:%02x\n",
+						pSrcBufVA[0], pSrcBufVA[1], pSrcBufVA[2],
+						pSrcBufVA[3], pSrcBufVA[4], pSrcBufVA[5]);
+
+				DBGPRINT("%s: Master at 0x%lx, "
+						"%02x:%02x:%02x:%02x:%02x:%02x\n", pAd->master->name, pAd->master->base_addr,
+						pAd->master->dev_addr[0], pAd->master->dev_addr[1], pAd->master->dev_addr[2],
+						pAd->master->dev_addr[3], pAd->master->dev_addr[4], pAd->master->dev_addr[5]);
+
+				DBGPRINT("%s: pAd->RaCfgObj.MainDev at 0x%lx, "
+						"%02x:%02x:%02x:%02x:%02x:%02x\n", pAd->RaCfgObj.MainDev->name, pAd->RaCfgObj.MainDev->base_addr,
+						pAd->RaCfgObj.MainDev->dev_addr[0], pAd->RaCfgObj.MainDev->dev_addr[1], pAd->RaCfgObj.MainDev->dev_addr[2],
+						pAd->RaCfgObj.MainDev->dev_addr[3], pAd->RaCfgObj.MainDev->dev_addr[4], pAd->RaCfgObj.MainDev->dev_addr[5]);
+
+				printk("%s:%s:%d memcmp(pSrcBufVA, pAd->master->dev_addr, 6)=%d, memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6)=%d!\n",__FILE__,__FUNCTION__,__LINE__, memcmp(pSrcBufVA, pAd->master->dev_addr, 6), memcmp(pSrcBufVA+6, pAd->RaCfgObj.MainDev->dev_addr, 6));
 				dev_kfree_skb(skb);
 				DBGPRINT("Fail first compare mac address");
 				return TRUE;
@@ -3069,10 +2897,12 @@ boolean racfg_frame_handle(iNIC_PRIVATE *pAd, struct sk_buff *skb)
 		}
 		break;
 		case RACFG_CMD_TYPE_SYNC | RACFG_CMD_TYPE_RSP_FLAG:
-		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC))
+		if (pAd->RaCfgObj.bGetMac && (command_id == RACFG_CMD_GET_MAC)){
 			dev_kfree_skb(skb);
-		else
-			FeedbackRspHandler(pAd, skb);
+		}
+		else{
+			IoctlRspHandler(pAd, skb);
+		}
 		break;
 		case RACFG_CMD_TYPE_COPY_TO_USER | RACFG_CMD_TYPE_RSP_FLAG:
 		case RACFG_CMD_TYPE_IWREQ_STRUC  | RACFG_CMD_TYPE_RSP_FLAG:

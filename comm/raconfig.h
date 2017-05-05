@@ -263,7 +263,7 @@ enum {
 
 #ifdef CONFIG_CONCURRENT_INIC_SUPPORT
 #undef GET_MAC_TIMEOUT
-#define GET_MAC_TIMEOUT    120   // 50 secs
+#define GET_MAC_TIMEOUT    40   // 50 secs
 #endif
 
 
